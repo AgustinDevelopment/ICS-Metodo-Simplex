@@ -8,3 +8,14 @@ datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
 }
+
+model Problem {
+  id           Int      @id @default(autoincrement())
+  name         String
+  objective    String  
+  constraints  String   
+  variables    Int      
+  restrictions Int     
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}

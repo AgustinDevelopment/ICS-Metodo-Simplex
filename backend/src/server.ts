@@ -1,13 +1,36 @@
-
-import express from 'express';
+import express, { Application } from 'express';
 import cors from 'cors';
 
-const app = express();
-app.use(cors());
-app.use(express.json());
+import { SimplexSolverController } from './controllers/simplex-solver-controller';
+import { SimplexSolverMiddleware } from './middlewares/simplex-solver-middleware';
+import { SimplexSolverRouter } from './routes/simplex-solver-router';
 
-app.get('/ping', (_req, res) => {
-  res.json({ message: 'pong' });
-});
+export class Server {
+  private app: Application = express();
+  private port: number = Number(process.env.PORT) || 3000;
 
-export default app;
+  constructor() {
+    this.setMiddlewares();
+    this.setRouters();
+  }
+
+  private setMiddlewares(): void {
+    this.app.use(cors());
+    this.app.use(express.json());
+    this.app.use(express.urlencoded({ extended: true }));
+  }
+
+  private setRouters(): void {
+    const controller = new SimplexSolverController();
+    const middleware = new SimplexSolverMiddleware();
+    const simplexSolverRouter = new SimplexSolverRouter({ controller, middleware });
+
+    this.app.use('/problems', simplexSolverRouter.router);
+  }
+
+  public run(): void {
+    this.app.listen(this.port, () => {
+      console.log(`Servidor corriendo en http://localhost:${this.port}`);
+    });
+  }
+}
