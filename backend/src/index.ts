@@ -1,6 +1,13 @@
-import { config } from './config/env';
-import app from './server';
+import { exit } from 'node:process';
+import { Server } from './server';
 
-app.listen(config.port, () => {
-  console.log(`Servidor corriendo en http://localhost:${config.port}`);
-});
+const server = new Server();
+
+(() => {
+    try {
+        server.run();
+    } catch (error) {
+        console.log(error);
+        exit(1);
+    }
+})();
