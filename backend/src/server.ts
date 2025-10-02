@@ -4,10 +4,11 @@ import cors from 'cors';
 import { SimplexSolverController } from './controllers/simplex-solver-controller';
 import { SimplexSolverMiddleware } from './middlewares/simplex-solver-middleware';
 import { SimplexSolverRouter } from './routes/simplex-solver-router';
+import { SimplexSolverService } from './services/simplex-solver-service'
 
 export class Server {
-  private app: Application = express();
-  private port: number = Number(process.env.PORT) || 3000;
+  private readonly app: Application = express();
+  private readonly port: number = Number(process.env.PORT) || 3000;
 
   constructor() {
     this.setMiddlewares();
@@ -21,7 +22,8 @@ export class Server {
   }
 
   private setRouters(): void {
-    const controller = new SimplexSolverController();
+    const simplexService = new SimplexSolverService();
+    const controller = new SimplexSolverController(simplexService);
     const middleware = new SimplexSolverMiddleware();
     const simplexSolverRouter = new SimplexSolverRouter({ controller, middleware });
 

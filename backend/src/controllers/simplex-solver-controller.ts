@@ -3,7 +3,7 @@ import { SimplexSolverService } from '../services/simplex-solver-service';
 import { SimplexProblem } from '../types/types';
 
 export class SimplexSolverController {
-  constructor(private simplexService: SimplexSolverService) {}
+  constructor(private readonly simplexService: SimplexSolverService) {}
 
   async createProblem(req: Request, res: Response) {
     res.status(201).json({ msg: 'Problema creado' });

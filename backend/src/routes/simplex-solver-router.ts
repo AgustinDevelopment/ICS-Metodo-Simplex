@@ -1,4 +1,3 @@
-import { Router } from 'express';
 import { SimplexSolverController } from '../controllers/simplex-solver-controller';
 import { SimplexSolverMiddleware } from '../middlewares/simplex-solver-middleware';
 import { BaseRouter } from '../utils/base-router';

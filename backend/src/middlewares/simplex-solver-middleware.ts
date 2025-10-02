@@ -47,7 +47,9 @@ export class SimplexSolverMiddleware {
   async validateDeleteProblem(req: Request, res: Response, next: NextFunction) {
     const id = parseInt(req.params.id);
     if (isNaN(id)) {
-      return res.status(400).json({ message: 'Invalid ID format' });
+      // Log the error for delete operation
+      console.error(`Delete operation failed: Invalid ID format (${req.params.id})`);
+      return res.status(400).json({ message: 'Invalid ID format for delete operation' });
     }
     return next();
   }

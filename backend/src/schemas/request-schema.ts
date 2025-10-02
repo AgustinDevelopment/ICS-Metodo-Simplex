@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { Operator } from '../types/types';
+
 
 export const coefficientSchema = z.object({
   value: z.number(),
