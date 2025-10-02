@@ -41,7 +41,7 @@ export class SimplexSolverService {
   }
 
   /**
-   * Realiza una iteración del método Simplex
+   * correccion->Realiza una iteración del método Simplex
    */
   private iterate(tableau: SimplexTableau): SimplexTableau {
     throw new Error('Not implemented');
