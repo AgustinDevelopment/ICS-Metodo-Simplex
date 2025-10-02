@@ -1,6 +1,10 @@
 import { Request, Response } from 'express';
+import { SimplexSolverService } from '../services/simplex-solver-service';
+import { SimplexProblem } from '../types/types';
 
 export class SimplexSolverController {
+  constructor(private simplexService: SimplexSolverService) {}
+
   async createProblem(req: Request, res: Response) {
     res.status(201).json({ msg: 'Problema creado' });
   }
@@ -19,5 +23,12 @@ export class SimplexSolverController {
 
   async deleteProblem(req: Request, res: Response) {
     res.status(200).json({ msg: 'Problema eliminado' });
+  }
+
+  async solveProblem(problem: SimplexProblem) {
+    if (!this.simplexService.validateProblem(problem)) {
+      throw new Error('Invalid problem format');
+    }
+    // ... lógica del controlador ...
   }
 }
