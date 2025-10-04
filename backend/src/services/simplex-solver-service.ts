@@ -2,19 +2,17 @@ import { SimplexProblem, SimplexSolution, SimplexTableau, SimplexError, Coeffici
 
 export class SimplexSolverService {
 
-  /* Valida el problema antes de resolverlo
-   * Devuelve 'true' si es válido, 'SIN_SOLUCION' si es inviable, o 'false' si es inválido.
-   */
+  // Valida el problema. Retorna: true (válido), 'SIN_SOLUCION' (inviable) o false (inválido)
   validateProblem(problem: SimplexProblem): true | 'SIN_SOLUCION' | false {
     // Validación básica
     if (!problem.objective || !problem.constraints || problem.constraints.length === 0) {
       return false;
     }
-    // Para esta implementación inicial requerimos exactamente 2 variables
+    // Esta versión apunta a 2 variables
     if (problem.variables.length !== 2) {
       return false;
     }
-    // Validación básica de inviabilidad: si alguna restricción tiene lado derecho negativo y todos sus coeficientes >= 0
+    // Heurística rápida de inviabilidad
     for (const constraint of problem.constraints) {
       if (constraint.rightSide < 0) {
         const allPositive = constraint.coefficients.every(coef => coef.value >= 0);
@@ -24,7 +22,7 @@ export class SimplexSolverService {
       }
     }
 
-    // NUEVO: detectar contradicciones directas entre restricciones con el mismo lado izquierdo
+    // Contradicciones directas entre restricciones con el mismo lado izquierdo
     if (this.hasDirectContradictions(problem)) {
       return 'SIN_SOLUCION';
     }
@@ -32,9 +30,7 @@ export class SimplexSolverService {
     return true;
   }
 
-  /**
-   * Crea la tabla inicial del método Simplex
-   */
+  // Crea la tabla inicial del método Simplex
   createInitialTableau(problem: SimplexProblem): SimplexTableau {
     // Establecemos el formato estándar para el método simplex
     const numConstraints = problem.constraints.length;
@@ -70,7 +66,7 @@ export class SimplexSolverService {
       matrix[i][totalVars] = constraint.rightSide;
     }
     
-    // Fila para la función objetivo (negativa para maximización)
+  // Fila objetivo (negativa para maximización)
     const isMaximization = problem.objective.type === 'max';
     const objectiveMultiplier = isMaximization ? -1 : 1;
     
@@ -103,9 +99,7 @@ export class SimplexSolverService {
     };
   }
 
-  /**
-   * Resuelve el problema usando el método Simplex
-   */
+  // Resuelve el problema
   solve(problem: SimplexProblem): SimplexSolution | SimplexError {
     // Validar el problema
     const validacion = this.validateProblem(problem);
@@ -116,20 +110,20 @@ export class SimplexSolverService {
       return { message: 'El problema no tiene solución posible (restricciones incompatibles)', type: 'SIN_SOLUCION' };
     }
 
-    // Atajo robusto para 2 variables: enumeración de vértices (geometría en R^2)
-    if (problem.variables.length === 2) {
-      const byEnum = this.solveByVertexEnumeration(problem);
-      if (byEnum) return this.roundSolution(byEnum, 6);
-    }
-
-    // Camino rápido: si podemos transformar todo a "<=" y a max, evitamos Fase I
-    const normalized = this.normalizeToLEAndMax(problem);
-    const canStandard = normalized.constraints.every(c => c.operator === '<=');
+  const normalized = this.normalizeToLEAndMax(problem);
+  const canStandard = normalized.constraints.every(c => c.operator === '<=' && c.rightSide >= 0);
     let currentTableau: SimplexTableau;
     if (canStandard) {
       currentTableau = this.createInitialTableau(normalized);
+      // Si es minimización, invertimos la fila objetivo para usar la misma regla de pivoteo
+      if (normalized.objective.type === 'min') {
+        const lastRowStd = currentTableau.matrix.length - 1;
+        for (let j = 0; j < currentTableau.matrix[0].length; j++) {
+          currentTableau.matrix[lastRowStd][j] = -currentTableau.matrix[lastRowStd][j];
+        }
+      }
     } else {
-      // FASE I (detección robusta de inviabilidad mediante variables artificiales)
+      // Fase I (detección de inviabilidad con variables artificiales)
       const phaseI = this.buildPhaseITableau(problem);
       if (phaseI) {
         const { tableau: t1 } = this.runSimplex(phaseI.tableau, 200);
@@ -151,9 +145,7 @@ export class SimplexSolverService {
         }
       }
     }
-  // Nota: la inversión de la fila objetivo para 'min' ya se hace
-  // - en el branch sin Fase I (más arriba), o
-  // - dentro de buildPhaseIISimplexTableau cuando hubo Fase I.
+    // Nota: la inversión para 'min' ya se contempla arriba o en buildPhaseIISimplexTableau.
     const iterations: SimplexTableau[] = [JSON.parse(JSON.stringify(currentTableau))];
     const MAX_ITERATIONS = 100;
     let iteration = 0;
@@ -169,11 +161,11 @@ export class SimplexSolverService {
       const pivotRow = this.findPivotRow(currentTableau, pivotColumn);
 
       if (pivotRow === -1) {
-        // Problema no acotado
+        // No acotado respecto a este tableau
         return { message: 'El problema no tiene solución acotada', type: 'NO_ACOTADA' };
       }
 
-      // BUGFIX: swap correcto entre variable entrante y saliente
+  // Swap entre variable entrante y saliente
       const entering = currentTableau.nonBasis[pivotColumn];
       const leaving = currentTableau.basis[pivotRow];
       currentTableau.basis[pivotRow] = entering;
@@ -209,7 +201,18 @@ export class SimplexSolverService {
       objectiveValue += coef.value * val;
     }
 
-  return this.roundSolution({ optimal: true, bounded: true, variables, objectiveValue, iterations }, 6);
+    // Cross-check 2D: si enumeración encuentra mejor solución finita, la usamos (no afecta NO_ACOTADA)
+    if (problem.variables.length === 2) {
+      const enumRes = this.solveByVertexEnumeration(problem);
+      if (enumRes && !('type' in enumRes)) {
+        const better = problem.objective.type === 'max'
+          ? enumRes.objectiveValue > objectiveValue + 1e-9
+          : enumRes.objectiveValue < objectiveValue - 1e-9;
+        if (better) return this.roundSolution(enumRes, 6);
+      }
+    }
+
+    return this.roundSolution({ optimal: true, bounded: true, variables, objectiveValue, iterations }, 6);
   }
 
   // Resolver LP de 2 variables por enumeración de vértices del polígono factible
@@ -303,28 +306,18 @@ export class SimplexSolverService {
     return { optimal: true, bounded: true, variables, objectiveValue: bestValue, iterations: [] };
   }
 
-  // --- Utilidades de redondeo ---
-  private round(value: number, decimals = 6): number {
-    const factor = Math.pow(10, decimals);
-    return Math.round(value * factor) / factor;
-  }
+  // Redondeo breve y legible
+  private round(value: number, decimals = 6): number { return +value.toFixed(decimals); }
 
   private roundSolution(result: SimplexSolution | SimplexError, decimals = 6): SimplexSolution | SimplexError {
     if ('type' in result) return result;
-    const roundedVars = new Map<string, number>();
-    result.variables.forEach((v, k) => {
-      roundedVars.set(k, this.round(v, decimals));
-    });
-    return {
-      optimal: result.optimal,
-      bounded: result.bounded,
-      variables: roundedVars,
-      objectiveValue: this.round(result.objectiveValue, decimals),
-      iterations: result.iterations
-    };
-    }
+    const roundedVars = new Map<string, number>(
+      Array.from(result.variables.entries()).map(([k, v]) => [k, +v.toFixed(decimals)])
+    );
+    return { ...result, variables: roundedVars, objectiveValue: +result.objectiveValue.toFixed(decimals) };
+  }
 
-  // Convierte todas las restricciones a "<=" (multiplicando por -1 si eran ">=") y convierte min a max
+  // Convierte todas las restricciones a "<=" (multiplicando por -1 si eran ">=")
   private normalizeToLEAndMax(problem: SimplexProblem): SimplexProblem {
     const constraints: { operator: Operator; rightSide: number; coefficients: Coefficient[] }[] = problem.constraints.map(c => {
       if (c.operator === '>=') {
@@ -336,23 +329,16 @@ export class SimplexSolverService {
       }
       return { operator: c.operator, rightSide: c.rightSide, coefficients: c.coefficients };
     });
-    const objective = problem.objective.type === 'min'
-      ? { type: 'max' as const, coefficients: problem.objective.coefficients.map(k => ({ variable: k.variable, value: -k.value })) }
-      : { type: problem.objective.type, coefficients: problem.objective.coefficients };
-    return { ...problem, constraints, objective };
+    // No modificamos la función objetivo aquí; la tratamos más adelante (invertimos fila si es 'min')
+    return { ...problem, constraints } as SimplexProblem;
   }
 
-  // Construye la fila objetivo original sobre la base resultante de Fase I, y elimina artificiales
+  // Construye la fila objetivo original sobre la base de Fase I
   private buildPhaseIISimplexTableau(problem: SimplexProblem, phaseITableau: SimplexTableau): SimplexTableau {
-    // Clonar el tableau de Fase I
     const tableau: SimplexTableau = JSON.parse(JSON.stringify(phaseITableau));
     const rows = tableau.matrix.length;
     const cols = tableau.matrix[0].length;
     const lastRow = rows - 1;
-
-    // Detectar columnas artificiales por heurística: aquellas que tienen 1 en exactamente una fila y 0 en el resto,
-    // y no corresponden a variables de decisión (por nombre no lo sabemos aquí). Para simplificar, mantendremos todas
-    // las columnas y solo reconstruiremos la fila objetivo original, lo cual es suficiente para 2 variables.
 
     // Inicializar fila objetivo con costos originales en columnas de variables de decisión
     const objectiveRow = new Array(cols).fill(0);
@@ -374,7 +360,7 @@ export class SimplexSolverService {
       }
     }
 
-    // Para minimización, invertimos la fila objetivo para usar misma regla de pivoteo (coeficientes negativos avanzan)
+    // Minimización: invertimos la fila objetivo para usar la misma regla de pivoteo
     if (problem.objective.type === 'min') {
       for (let j = 0; j < cols; j++) objectiveRow[j] = -objectiveRow[j];
     }
@@ -405,7 +391,7 @@ export class SimplexSolverService {
     return { tableau };
   }
 
-  // Construye un tableau de Fase I (si se necesitan artificiales). Si no se necesitan, retorna null.
+  // Construye un tableau de Fase I (si se necesitan artificiales). Si no, retorna null.
   private buildPhaseITableau(problem: SimplexProblem): { tableau: SimplexTableau, artificialCols: number[], rowArtificial: (number|null)[] } | null {
     const n = problem.variables.length;
     const m = problem.constraints.length;
@@ -434,8 +420,7 @@ export class SimplexSolverService {
       }
     }
 
-    const cols = colIndex + 1; // +1 por RHS
-    // Si no hay artificiales, no hace falta Fase I
+  const cols = colIndex + 1; // +1 por RHS
   if (artificialCols.length === 0) return null;
 
     const matrix: number[][] = Array.from({ length: rows }, () => new Array(cols).fill(0));
@@ -455,17 +440,15 @@ export class SimplexSolverService {
       matrix[i][cols - 1] = cons.rightSide;
     }
 
-    // Fila objetivo de Fase I: maximizar -Σ a_i
-    // => coeficiente -1 en columnas artificiales, 0 en resto
+  // Fila objetivo de Fase I: maximizar -Σ a_i (coef -1 en columnas artificiales)
     for (const aCol of artificialCols) {
       matrix[rows - 1][aCol] = -1;
     }
 
-    // Limpiar fila objetivo respecto a artificiales básicas (Row0 = Row0 + Row_b)
+  // Limpiar fila objetivo respecto a artificiales básicas (Row0 += Row_b)
     for (let i = 0; i < m; i++) {
       const aCol = rowArtificial[i];
       if (aCol !== null) {
-        // sumar fila i a la fila objetivo para anular coeficiente -1 en aCol
         for (let j = 0; j < cols; j++) {
           matrix[rows - 1][j] += matrix[i][j];
         }
@@ -477,7 +460,7 @@ export class SimplexSolverService {
     for (let i = 0; i < m; i++) {
       if (rowSlack[i] !== null) basis.push(rowSlack[i]!);
       else if (rowArtificial[i] !== null) basis.push(rowArtificial[i]!);
-      else basis.push(0); // fallback (no debería suceder)
+      else basis.push(0);
     }
     // No base = el resto
     const nonBasis: number[] = [];
@@ -490,7 +473,7 @@ export class SimplexSolverService {
     return { tableau: { matrix, basis, nonBasis, objectiveRow }, artificialCols, rowArtificial };
   }
 
-  // Intenta pivotear todas las artificiales fuera de la base usando cualquier columna no artificial disponible
+  // Intenta pivotear artificiales fuera de la base usando columnas no artificiales disponibles
   private pivotOutArtificial(tableau: SimplexTableau, artificialCols: number[]): void {
     const rows = tableau.matrix.length - 1;
     const cols = tableau.matrix[0].length - 1;
@@ -506,9 +489,8 @@ export class SimplexSolverService {
           }
         }
         if (enterCol !== -1) {
-          // swap en estructuras
-          const entering = tableau.nonBasis.includes(enterCol) ? tableau.nonBasis[tableau.nonBasis.indexOf(enterCol)] : enterCol;
-          tableau.basis[i] = entering;
+          // swap sencillo
+          tableau.basis[i] = enterCol;
           // actualizar nonBasis: reemplazar enterCol por antiguo básico si procede
           const idxNB = tableau.nonBasis.indexOf(enterCol);
           if (idxNB !== -1) tableau.nonBasis[idxNB] = b;
@@ -588,7 +570,7 @@ export class SimplexSolverService {
     return tableau;
   }
 
-  // NUEVO: detección de contradicciones directas (rápida) para casos como x1+x2 >= 10 y x1+x2 <= 5
+  // Detección de contradicciones directas
   private hasDirectContradictions(problem: SimplexProblem): boolean {
     // Normalizar cada restricción a un vector ordenado por problem.variables
     type Bucket = {
@@ -617,14 +599,14 @@ export class SimplexSolverService {
       const minLEQ = bucket.leq.length ? Math.min(...bucket.leq) : +Infinity;
       const maxGEQ = bucket.geq.length ? Math.max(...bucket.geq) : -Infinity;
 
-      // Si hay igualdad, su RHS debe estar entre los límites, si existen
+  // Si hay igualdad, su RHS debe estar entre los límites, si existen
       for (const rhsEq of bucket.eq) {
         if (rhsEq > minLEQ || rhsEq < maxGEQ) {
           return true; // igualdad fuera de los límites => inviable
         }
       }
 
-      // Si no hay igualdad, pero los límites se cruzan, inviable
+  // Si no hay igualdad, pero los límites se cruzan, inviable
       if (maxGEQ > minLEQ) {
         return true;
       }

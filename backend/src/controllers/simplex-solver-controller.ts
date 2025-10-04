@@ -104,10 +104,19 @@ export class SimplexSolverController {
         variables: typeof problemData.variables === 'string' ? JSON.parse(problemData.variables) : problemData.variables
       };
 
+      // Validación temprana: evita ejecutar el motor si es inviable o inválido
+      const validacion = this.simplexService.validateProblem(problem);
+      if (validacion === false) {
+        return res.status(400).json({ msg: 'Problema no válido para el método simplex', status: 'ENTRADA_INVALIDA' });
+      }
+      if (validacion === 'SIN_SOLUCION') {
+        return res.status(400).json({ msg: 'El problema no tiene solución posible (restricciones incompatibles)', status: 'SIN_SOLUCION' });
+      }
+
       const solution = this.simplexService.solve(problem);
 
       if ('type' in solution) {
-        // Es un error
+        // Es un error (NO_ACOTADA | SIN_SOLUCION | ENTRADA_INVALIDA)
         return res.status(400).json({
           msg: solution.message,
           status: solution.type
@@ -124,7 +133,7 @@ export class SimplexSolverController {
         solution: {
           variables: variablesObj,
           objectiveValue: solution.objectiveValue,
-          status: solution.optimal ? 'OPTIMA' : solution.bounded ? 'FACTIBLE' : 'NO_ACOTADA'
+          status: 'OPTIMA'
         }
       });
     } catch (error) {
