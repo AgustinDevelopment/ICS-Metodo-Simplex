@@ -44,11 +44,5 @@ export class SimplexSolverRouter extends BaseRouter<SimplexSolverController> {
 			(req, res, next) => this.middleware.validateDeleteProblem(req, res, next),
 			(req, res) => this.controller.deleteProblem(req, res)
 		);
-
-		this.router.post(
-			'/:id/solve',
-			(req, res, next) => this.middleware.validateGetProblem(req, res, next),
-			(req, res) => this.controller.solveProblemById(req, res)
-		);
 	}
 }

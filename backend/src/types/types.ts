@@ -48,5 +48,5 @@ export interface SimplexSolution {
 
 export interface SimplexError {
   message: string;
-  type: 'UNBOUNDED' | 'INFEASIBLE' | 'INVALID_INPUT';
+  type: 'NO_ACOTADA' | 'SIN_SOLUCION' | 'ENTRADA_INVALIDA';
 }
