@@ -21,8 +21,10 @@ export const simplexProblemSchema = z.object({
   name: z.string().min(1),
   objective: objectiveFunctionSchema,
   constraints: z.array(constraintSchema),
-  variables: z.array(z.string()),
-});
+  variables: z.array(z.string())
+})
+.refine(d => d.variables.length === 2, { message: 'Se requieren exactamente 2 variables', path: ['variables'] })
+.refine(d => new Set(d.variables).size === d.variables.length, { message: 'Variables duplicadas', path: ['variables'] });
 
 export const updateProblemSchema = simplexProblemSchema.partial();
 

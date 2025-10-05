@@ -5,6 +5,7 @@ import { SimplexSolverController } from './controllers/simplex-solver-controller
 import { SimplexSolverMiddleware } from './middlewares/simplex-solver-middleware';
 import { SimplexSolverRouter } from './routes/simplex-solver-router';
 import { SimplexSolverService } from './services/simplex-solver-service'
+import { createSimplexRouter } from './routes/simplex-router';
 
 export class Server {
   private readonly app: Application = express();
@@ -28,6 +29,7 @@ export class Server {
     const simplexSolverRouter = new SimplexSolverRouter({ controller, middleware });
 
     this.app.use('/problems', simplexSolverRouter.router);
+    this.app.use('/simplex', createSimplexRouter(controller, middleware));
   }
 
   public run(): void {
