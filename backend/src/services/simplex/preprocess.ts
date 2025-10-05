@@ -1,6 +1,12 @@
+// Preprocesamiento y validaciones para problemas de PL antes de correr Simplex.
 import { Coefficient, Operator, SimplexProblem } from '../../types/types';
 
-// Valida el problema. Retorna: true (válido), 'SIN_SOLUCION' (inviable) o false (inválido)
+/*
+ * Valida el problema.
+ * - true: válido
+ * - 'SIN_SOLUCION': inviabilidad evidente
+ * - false: formato inválido
+ */
 export function validateProblem(problem: SimplexProblem): true | 'SIN_SOLUCION' | false {
   if (!problem.objective || !problem.constraints || problem.constraints.length === 0) {
     return false;
@@ -22,7 +28,10 @@ export function validateProblem(problem: SimplexProblem): true | 'SIN_SOLUCION' 
   return true;
 }
 
-// Detección de contradicciones directas
+/*
+ * Detecta contradicciones directas entre restricciones equivalentes (mismos coeficientes).
+ * Ejemplo: a<=b y a>=c con c>b; o a=rhs fuera de [maxGEQ, minLEQ].
+ */
 export function hasDirectContradictions(problem: SimplexProblem): boolean {
   type Bucket = { leq: number[]; geq: number[]; eq: number[]; };
   const map = new Map<string, Bucket>();
@@ -51,6 +60,9 @@ export function hasDirectContradictions(problem: SimplexProblem): boolean {
   return false;
 }
 
+/*
+ * Convierte lista de coeficientes a un vector ordenado según la lista de variables.
+ */
 export function coefficientVector(vars: string[], coefs: Coefficient[]): number[] {
   const vec = new Array(vars.length).fill(0);
   for (const c of coefs) {
@@ -60,7 +72,10 @@ export function coefficientVector(vars: string[], coefs: Coefficient[]): number[
   return vec;
 }
 
-// Convierte todas las restricciones a "<=" (multiplicando por -1 si eran ">=")
+/*
+ * Normaliza restricciones a la forma "<=" y mantiene el resto intacto.
+ * Útil para heurísticas y uniformidad de entradas.
+ */
 export function normalizeToLEAndMax(problem: SimplexProblem): SimplexProblem {
   const constraints: { operator: Operator; rightSide: number; coefficients: Coefficient[] }[] =
     problem.constraints.map(c => {
@@ -74,4 +89,12 @@ export function normalizeToLEAndMax(problem: SimplexProblem): SimplexProblem {
       return { operator: c.operator, rightSide: c.rightSide, coefficients: c.coefficients };
     });
   return { ...problem, constraints } as SimplexProblem;
+}
+
+/*
+ * Indica si puede usarse la forma estándar directamente (todas <= y RHS >= 0).
+ * Se recomienda llamar con el problema ya normalizado a <=.
+ */
+export function canUseStandardForm(problem: SimplexProblem): boolean {
+  return problem.constraints.every(c => c.operator === '<=' && c.rightSide >= 0);
 }

@@ -1,9 +1,15 @@
+// Resolución por Enumeración de Vértices (solo para 2 variables) como alternativa al Simplex.
 import { Coefficient, SimplexError, SimplexProblem, SimplexSolution } from '../../types/types';
 import { roundSolution } from './utils';
+import { EPS, DEFAULT_DECIMALS } from './constants';
 
+/*
+ * Resuelve problemas 2D enumerando intersecciones de restricciones y ejes.
+ * Devuelve null si no aplica o si se decide delegar a otra técnica.
+ */
 export function solveByVertexEnumeration(problem: SimplexProblem): SimplexSolution | SimplexError | null {
   const [v1, v2] = problem.variables;
-  const eps = 1e-9;
+  const eps = EPS;
 
   const getCoeff = (coefs: Coefficient[], name: string) => (coefs.find(c => c.variable === name)?.value ?? 0);
   const feasible = (x: number, y: number) => {
@@ -14,7 +20,7 @@ export function solveByVertexEnumeration(problem: SimplexProblem): SimplexSoluti
       const lhs = a * x + b * y;
       if (cons.operator === '<=') { if (lhs - cons.rightSide > eps) return false; }
       else if (cons.operator === '>=') { if (cons.rightSide - lhs > eps) return false; }
-      else { if (Math.abs(lhs - cons.rightSide) > 1e-7) return false; }
+  else { if (Math.abs(lhs - cons.rightSide) > EPS) return false; }
     }
     return true;
   };
@@ -80,5 +86,5 @@ export function solveByVertexEnumeration(problem: SimplexProblem): SimplexSoluti
   }
 
   const variables = new Map<string, number>([[v1, best.x],[v2, best.y]]);
-  return roundSolution({ optimal: true, bounded: true, variables, objectiveValue: bestValue, iterations: [] }, 6) as SimplexSolution;
+  return roundSolution({ optimal: true, bounded: true, variables, objectiveValue: bestValue, iterations: [] }, DEFAULT_DECIMALS) as SimplexSolution;
 }
