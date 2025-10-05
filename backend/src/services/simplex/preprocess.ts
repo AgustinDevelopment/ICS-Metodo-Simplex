@@ -32,30 +32,50 @@ export function validateProblem(problem: SimplexProblem): true | 'SIN_SOLUCION' 
  * Detecta contradicciones directas entre restricciones equivalentes (mismos coeficientes).
  * Ejemplo: a<=b y a>=c con c>b; o a=rhs fuera de [maxGEQ, minLEQ].
  */
-export function hasDirectContradictions(problem: SimplexProblem): boolean {
-  type Bucket = { leq: number[]; geq: number[]; eq: number[]; };
-  const map = new Map<string, Bucket>();
+type ConstraintBucket = { leq: number[]; geq: number[]; eq: number[] };
 
-  for (const cons of problem.constraints) {
-    const vec = coefficientVector(problem.variables, cons.coefficients);
-    const key = vec.map(v => v.toFixed(8)).join('|');
+function makeKey(vars: string[], coefs: Coefficient[]): string {
+  const vec = coefficientVector(vars, coefs);
+  return vec.map(v => v.toFixed(8)).join('|');
+}
 
-    if (!map.has(key)) map.set(key, { leq: [], geq: [], eq: [] });
-    const bucket = map.get(key)!;
-
-    if (cons.operator === '<=') bucket.leq.push(cons.rightSide);
-    else if (cons.operator === '>=') bucket.geq.push(cons.rightSide);
-    else bucket.eq.push(cons.rightSide);
+function getOrInitBucket(map: Map<string, ConstraintBucket>, key: string): ConstraintBucket {
+  let bucket = map.get(key);
+  if (!bucket) {
+    bucket = { leq: [], geq: [], eq: [] };
+    map.set(key, bucket);
   }
+  return bucket;
+}
 
+function addConstraintToBucket(bucket: ConstraintBucket, operator: Operator, rhs: number): void {
+  switch (operator) {
+    case '<=': bucket.leq.push(rhs); break;
+    case '>=': bucket.geq.push(rhs); break;
+    default: bucket.eq.push(rhs); break;
+  }
+}
+
+function bucketHasContradiction(bucket: ConstraintBucket): boolean {
+  const minLEQ = bucket.leq.length ? Math.min(...bucket.leq) : +Infinity;
+  const maxGEQ = bucket.geq.length ? Math.max(...bucket.geq) : -Infinity;
+  // Igualdades fuera del rango permitido
+  for (const rhsEq of bucket.eq) {
+    if (rhsEq > minLEQ || rhsEq < maxGEQ) return true;
+  }
+  // Rango incompatible entre <= y >=
+  return maxGEQ > minLEQ;
+}
+
+export function hasDirectContradictions(problem: SimplexProblem): boolean {
+  const map = new Map<string, ConstraintBucket>();
+  for (const cons of problem.constraints) {
+    const key = makeKey(problem.variables, cons.coefficients);
+    const bucket = getOrInitBucket(map, key);
+    addConstraintToBucket(bucket, cons.operator, cons.rightSide);
+  }
   for (const bucket of map.values()) {
-    const minLEQ = bucket.leq.length ? Math.min(...bucket.leq) : +Infinity;
-    const maxGEQ = bucket.geq.length ? Math.max(...bucket.geq) : -Infinity;
-
-    for (const rhsEq of bucket.eq) {
-      if (rhsEq > minLEQ || rhsEq < maxGEQ) return true;
-    }
-    if (maxGEQ > minLEQ) return true;
+    if (bucketHasContradiction(bucket)) return true;
   }
   return false;
 }

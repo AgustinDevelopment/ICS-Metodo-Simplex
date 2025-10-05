@@ -1,6 +1,6 @@
 // Operaciones sobre el tableau del método Simplex: inicialización, pivoteo e iteración.
 import { SimplexProblem, SimplexTableau } from '../../types/types';
-import { DEFAULT_MAX_ITERATIONS } from './constants';
+import { DEFAULT_MAX_ITERATIONS, EPS } from './constants';
 
 /*
  * Crea un tableau inicial (con holguras o excesos) a partir del problema.
@@ -20,7 +20,8 @@ export function createInitialTableau(problem: SimplexProblem): SimplexTableau {
       const varIndex = problem.variables.indexOf(coef.variable);
       if (varIndex !== -1) matrix[i][varIndex] = coef.value;
     }
-    matrix[i][numVars + i] = constraint.operator === '<=' ? 1 : -1;
+  // Este creador de tableau estándar se usa solo cuando todas son <=
+  matrix[i][numVars + i] = 1;
     matrix[i][totalVars] = constraint.rightSide;
   }
 
@@ -46,18 +47,24 @@ export function createInitialTableau(problem: SimplexProblem): SimplexTableau {
  * Encuentra la columna pivote usando la regla del más negativo (maximización típica).
  * Retorna -1 si ya no hay mejora posible.
  */
+function hasPositiveInColumn(tableau: SimplexTableau, col: number): boolean {
+  for (let i = 0; i < tableau.matrix.length - 1; i++) {
+    if (tableau.matrix[i][col] > EPS) return true;
+  }
+  return false;
+}
+
 export function findPivotColumn(tableau: SimplexTableau): number {
   const objectiveRow = tableau.matrix[tableau.matrix.length - 1];
   const lastColIndex = objectiveRow.length - 1;
-  let minValue = 0;
-  let minIndex = -1;
+  let best = { val: 0, idx: -1 };
+  let fallback = { val: 0, idx: -1 };
   for (let j = 0; j < lastColIndex; j++) {
-    if (objectiveRow[j] < minValue) {
-      minValue = objectiveRow[j];
-      minIndex = j;
-    }
+    const val = objectiveRow[j];
+    if (val < fallback.val - EPS) { fallback = { val, idx: j }; }
+    if (val < best.val - EPS && hasPositiveInColumn(tableau, j)) { best = { val, idx: j }; }
   }
-  return minIndex;
+  return best.idx !== -1 ? best.idx : fallback.idx;
 }
 
 /*
@@ -69,7 +76,7 @@ export function findPivotRow(tableau: SimplexTableau, pivotColumn: number): numb
   let minRatio = Infinity;
   let minIndex = -1;
   for (let i = 0; i < tableau.matrix.length - 1; i++) {
-    if (tableau.matrix[i][pivotColumn] > 0) {
+    if (tableau.matrix[i][pivotColumn] > EPS) {
       const ratio = tableau.matrix[i][lastColIndex] / tableau.matrix[i][pivotColumn];
       if (ratio >= 0 && ratio < minRatio) {
         minRatio = ratio;
@@ -109,13 +116,15 @@ export function runSimplex(start: SimplexTableau, maxIterations: number): { tabl
   let it = 0;
   while (it < maxIterations) {
     const pivotColumn = findPivotColumn(tableau);
-    if (pivotColumn === -1) break;
+    if (pivotColumn === -1) { break; }
     const pivotRow = findPivotRow(tableau, pivotColumn);
-    if (pivotRow === -1) break;
-    const entering = tableau.nonBasis[pivotColumn];
+    if (pivotRow === -1) { break; }
+    const entering = pivotColumn; // usar índice de columna absoluto como variable entrante
     const leaving = tableau.basis[pivotRow];
     tableau.basis[pivotRow] = entering;
-    tableau.nonBasis[pivotColumn] = leaving;
+    // reemplazar en nonBasis el índice 'entering' por 'leaving'
+    const nbIdx = tableau.nonBasis.indexOf(entering);
+    if (nbIdx !== -1) tableau.nonBasis[nbIdx] = leaving;
     tableau = iterate(tableau, pivotRow, pivotColumn);
     it++;
   }
