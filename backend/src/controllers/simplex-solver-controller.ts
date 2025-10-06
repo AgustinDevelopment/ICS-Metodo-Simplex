@@ -1,7 +1,9 @@
 import { Request, Response } from 'express';
 import { SimplexSolverService } from '../services/simplex-solver-service';
-import { SimplexProblem } from '../types/types';
+import { SimplexProblem, SimplexSolution, SimplexError } from '../types/types';
 import prisma from '../config/database';
+
+type SimplexResult = SimplexSolution | SimplexError;
 
 export class SimplexSolverController {
   constructor(private readonly simplexService: SimplexSolverService) {}
@@ -83,11 +85,19 @@ export class SimplexSolverController {
     }
   }
 
-  async solveProblem(problem: SimplexProblem) {
-    if (!this.simplexService.validateProblem(problem)) {
-      throw new Error('Invalid problem format');
+  async solveUnsavedProblem(req: Request, res: Response) {
+    try {
+      // Crear un problema a partir del request sin persistirlo en DB
+      const problem: SimplexProblem = req.body as SimplexProblem; 
+      const result = this.simplexService.solve(problem) ;
+    
+      return this.processSolutionResult(res, problem.name || 'Problema no guardado', result);
+
+      
+    } catch (error) {
+      console.error('Error solving unsaved problem:', error);
+      res.status(500).json({msg: 'Error interno al resolver el problema no guardado'});
     }
-    return this.simplexService.solve(problem);
   }
 
   async solveProblemById(req: Request, res: Response) {
@@ -104,7 +114,9 @@ export class SimplexSolverController {
         variables: typeof problemData.variables === 'string' ? JSON.parse(problemData.variables) : problemData.variables
       };
 
-      // Validación temprana: evita ejecutar el motor si es inviable o inválido
+      /*   
+       //Validación temprana: evita ejecutar el motor si es inviable o inválido
+
       const validacion = this.simplexService.validateProblem(problem);
       if (validacion === false) {
         return res.status(400).json({ msg: 'Problema no válido para el método simplex', status: 'ENTRADA_INVALIDA' });
@@ -113,33 +125,52 @@ export class SimplexSolverController {
         return res.status(400).json({ msg: 'El problema no tiene solución posible (restricciones incompatibles)', status: 'SIN_SOLUCION' });
       }
 
-      const solution = this.simplexService.solve(problem);
+      //"solve()" devuelve el error si la validación falla.
+      */
 
-      if ('type' in solution) {
-        // Es un error (NO_ACOTADA | SIN_SOLUCION | ENTRADA_INVALIDA)
-        return res.status(400).json({
-          msg: solution.message,
-          status: solution.type
-        });
-      }
+      const result = this.simplexService.solve(problem);
 
-      // Convertir Map a objeto para JSON
-      const variablesObj: Record<string, number> = {};
-      solution.variables.forEach((value, key) => { variablesObj[key] = value; });
-
-      return res.status(200).json({
-        msg: 'Problema resuelto correctamente',
-        problem: { id: problemData.id, name: problemData.name },
-        solution: {
-          variables: variablesObj,
-          objectiveValue: solution.objectiveValue,
-          status: 'OPTIMA'
-        }
-      });
+      return this.processSolutionResult(res, problemData.name, result, problemData.id);
+    
     } catch (error) {
       console.error('Error solving problem:', error);
       return res.status(500).json({ msg: 'Error al resolver el problema' });
     }
   }
+      
+  private processSolutionResult(res: Response, problemName: string, result: SimplexResult, problemId?: number) {
+        // Es un error (NO_ACOTADA, SIN_SOLUCION, ENTRADA_INVALIDA) ---
+        if ('type' in result) {
+            return res.status(400).json({
+                msg: `El problema '${problemName}' no pudo ser resuelto: ${result.message}`,
+                status: result.type,
+            });
+        } 
 
+      // Convertir Map a objeto para respuesta JSON
+      const variablesObj: Record<string, number> = {};
+      result.variables.forEach((value, key) => {
+            variablesObj[key] = value;
+        });
+
+        // Determinar el status basado en las propiedades de la solución
+        const solutionStatus = result.optimal 
+            ? 'OPTIMAL' 
+            : result.bounded 
+                ? 'FEASIBLE' 
+                : 'UNBOUNDED'; 
+
+        return res.status(200).json({
+            msg: 'Problema resuelto correctamente',
+            problem: {
+                id: problemId,
+                name: problemName
+            },
+            solution: {
+                variables: variablesObj,
+                objectiveValue: result.objectiveValue,
+                status: solutionStatus
+            }
+        });
+    }
 }
