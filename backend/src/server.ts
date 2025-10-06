@@ -30,6 +30,9 @@ export class Server {
 
     this.app.use('/problems', simplexSolverRouter.router);
     this.app.use('/simplex', createSimplexRouter(controller, middleware));
+    
+    // Ruta específica para los tests
+    this.app.use('/api', simplexSolverRouter.router);
   }
 
   public run(): void {
@@ -37,4 +40,18 @@ export class Server {
       console.log(`Servidor corriendo en http://localhost:${this.port}`);
     });
   }
+
+  public getApp(): Application {
+    return this.app;
+  }
 }
+
+//instancia del servidor para los tests
+const serverInstance = new Server();
+export const app = serverInstance.getApp();
+
+if (require.main === module) {
+  serverInstance.run();
+}
+
+
