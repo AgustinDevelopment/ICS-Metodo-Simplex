@@ -28,5 +28,7 @@ export const simplexProblemSchema = z.object({
 
 export const updateProblemSchema = simplexProblemSchema.partial();
 
+export type SimplexProblemDTO = z.infer<typeof simplexProblemSchema>;
+
 export const requestSchema = {
 };
