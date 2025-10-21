@@ -114,20 +114,6 @@ export class SimplexSolverController {
         variables: typeof problemData.variables === 'string' ? JSON.parse(problemData.variables) : problemData.variables
       };
 
-      /*   
-       //Validación temprana: evita ejecutar el motor si es inviable o inválido
-
-      const validacion = this.simplexService.validateProblem(problem);
-      if (validacion === false) {
-        return res.status(400).json({ msg: 'Problema no válido para el método simplex', status: 'ENTRADA_INVALIDA' });
-      }
-      if (validacion === 'SIN_SOLUCION') {
-        return res.status(400).json({ msg: 'El problema no tiene solución posible (restricciones incompatibles)', status: 'SIN_SOLUCION' });
-      }
-
-      //"solve()" devuelve el error si la validación falla.
-      */
-
       const result = this.simplexService.solve(problem);
 
       return this.processSolutionResult(res, problemData.name, result, problemData.id);
@@ -154,11 +140,14 @@ export class SimplexSolverController {
         });
 
         // Determinar el status basado en las propiedades de la solución
-        const solutionStatus = result.optimal 
-            ? 'OPTIMAL' 
-            : result.bounded 
-                ? 'FEASIBLE' 
-                : 'UNBOUNDED'; 
+        let solutionStatus: string;
+        if (result.optimal) {
+            solutionStatus = 'OPTIMAL';
+        } else if (result.bounded) {
+            solutionStatus = 'FEASIBLE';
+        } else {
+            solutionStatus = 'UNBOUNDED';
+        }
 
         return res.status(200).json({
             msg: 'Problema resuelto correctamente',

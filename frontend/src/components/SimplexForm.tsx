@@ -1,4 +1,7 @@
 import { useMemo, useState } from 'react'
+import { simplexService, type SimplexProblem } from '../services/simplexService'
+import { useAppDispatch, useAppSelector } from '../hooks/reduxHooks'
+import { setLoading, setSolution, setError, clearCurrentResult } from '../redux/slices/simplexSlice'
 
 type Optimization = 'max' | 'min'
 type Operator = '<=' | '=' | '>='
@@ -40,12 +43,16 @@ function newConstraint(): ConstraintForm {
 }
 
 export default function SimplexForm() {
+  // Redux
+  const dispatch = useAppDispatch()
+  const { currentResult, isLoading, error: reduxError } = useAppSelector((state) => state.simplex)
+
+  // Estado local del formulario
   const [c1, setC1] = useState('')
   const [c2, setC2] = useState('')
   const [opt, setOpt] = useState<Optimization>('max')
   const [constraints, setConstraints] = useState<ConstraintForm[]>([newConstraint()])
   const [errors, setErrors] = useState<Errors>({})
-  const [submittedOk, setSubmittedOk] = useState(false)
 
   const constraintsErrors = errors.constraints ?? {}
 
@@ -96,16 +103,52 @@ export default function SimplexForm() {
     setConstraints((prev) => prev.map((c) => (c.id === id ? { ...c, ...patch } : c)))
   }
 
-  function onSubmit(e: React.FormEvent) {
+  async function onSubmit(e: React.FormEvent) {
     e.preventDefault()
     const v = validateAll()
     setErrors(v)
     if (v.c1 || v.c2 || v.general || v.constraints) {
-      setSubmittedOk(false)
       return
     }
-    // Validación exitosa, no se envía al backend
-    setSubmittedOk(true)
+    
+    // Construir el problema en el formato del backend
+    const problem: SimplexProblem = {
+      name: 'Problema del formulario',
+      objective: {
+        type: opt,
+        coefficients: [
+          { value: Number(c1), variable: 'x1' },
+          { value: Number(c2), variable: 'x2' }
+        ]
+      },
+      constraints: constraints.map(ct => ({
+        coefficients: [
+          { value: Number(ct.a1), variable: 'x1' },
+          { value: Number(ct.a2), variable: 'x2' }
+        ],
+        operator: ct.op,
+        rightSide: Number(ct.rhs)
+      })),
+      variables: ['x1', 'x2']
+    }
+
+    // Enviar al backend usando Redux
+    dispatch(setLoading(true))
+    
+    try {
+      const response = await simplexService.solveUnsavedProblem(problem)
+      // Guardar en Redux
+      dispatch(setSolution(response))
+    } catch (error: any) {
+      if (error.response?.data) {
+        // Error del algoritmo (NO_ACOTADA, SIN_SOLUCION, etc.)
+        dispatch(setError(error.response.data))
+      } else {
+        // Error de conexión
+        dispatch(setError('Error al conectar con el servidor'))
+        setErrors({ general: 'Error al conectar con el servidor' })
+      }
+    }
   }
 
   return (
@@ -229,23 +272,59 @@ export default function SimplexForm() {
         <div style={{ display: 'flex', gap: 12 }}>
           <button
             type="submit"
-            disabled={!isValid}
-            style={{ background: '#222', color: '#fff', border: '1px solid #222', padding: '10px 16px', cursor: 'pointer', opacity: isValid ? 1 : 0.6 }}
+            disabled={!isValid || isLoading}
+            style={{ background: '#222', color: '#fff', border: '1px solid #222', padding: '10px 16px', cursor: 'pointer', opacity: (isValid && !isLoading) ? 1 : 0.6 }}
           >
-            Validar y enviar
+            {isLoading ? 'Resolviendo...' : 'Validar y enviar'}
           </button>
           <button
             type="button"
-            onClick={() => { setC1(''); setC2(''); setOpt('max'); setConstraints([newConstraint()]); setErrors({}); setSubmittedOk(false) }}
+            onClick={() => { 
+              setC1(''); 
+              setC2(''); 
+              setOpt('max'); 
+              setConstraints([newConstraint()]); 
+              setErrors({}); 
+              dispatch(clearCurrentResult());
+            }}
             style={{ background: '#f5f5f5', border: '1px solid #ddd', padding: '10px 16px', cursor: 'pointer' }}
           >
             Limpiar
           </button>
         </div>
       </form>
-      {submittedOk && (
-        <div style={{ marginTop: '1rem', color: 'green' }}>
-          Formulario válido. Listo para enviar.
+      
+      {currentResult && (
+        <div style={{ marginTop: '1rem', padding: '1rem', border: '1px solid #ddd', borderRadius: '4px' }}>
+          {'solution' in currentResult ? (
+            // Solución exitosa
+            <div>
+              <h3 style={{ color: 'green', marginTop: 0 }}>✓ Problema resuelto correctamente</h3>
+              <p><strong>Status:</strong> {currentResult.solution.status}</p>
+              <p><strong>Valor óptimo:</strong> {currentResult.solution.objectiveValue}</p>
+              <div>
+                <strong>Variables:</strong>
+                <ul>
+                  {Object.entries(currentResult.solution.variables).map(([key, value]) => (
+                    <li key={key}>{key} = {value}</li>
+                  ))}
+                </ul>
+              </div>
+            </div>
+          ) : (
+            // Error del algoritmo
+            <div>
+              <h3 style={{ color: 'crimson', marginTop: 0 }}>✗ Error al resolver</h3>
+              <p><strong>Status:</strong> {currentResult.status}</p>
+              <p>{currentResult.msg}</p>
+            </div>
+          )}
+        </div>
+      )}
+      
+      {reduxError && !currentResult && (
+        <div style={{ marginTop: '1rem', padding: '1rem', border: '1px solid crimson', borderRadius: '4px', backgroundColor: '#fff5f5' }}>
+          <p style={{ color: 'crimson', margin: 0 }}>{reduxError}</p>
         </div>
       )}
     </div>
