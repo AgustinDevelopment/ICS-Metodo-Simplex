@@ -75,7 +75,7 @@ export default function SimplexHistory() {
                   <ul style={{ margin: '4px 0', paddingLeft: '20px' }}>
                     {Object.entries(result.solution.variables).map(([key, value]) => (
                       <li key={key} style={{ margin: '2px 0' }}>
-                        <code>{key}</code> = <strong>{value as number}</strong>
+                        <code>{key}</code> = <strong>{value}</strong>
                       </li>
                     ))}
                   </ul>
