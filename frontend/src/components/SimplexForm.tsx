@@ -136,8 +136,13 @@ export default function SimplexForm() {
     dispatch(setLoading(true))
     
     try {
-      const response = await simplexService.solveUnsavedProblem(problem)
-      // Guardar en Redux
+      // 1. Guardar el problema en el backend (base de datos)
+      const createdProblem = await simplexService.createProblem(problem)
+      
+      // 2. Resolver el problema guardado usando su ID
+      const response = await simplexService.solveProblemById(createdProblem.problem.id)
+      
+      // 3. Guardar en Redux
       dispatch(setSolution(response))
     } catch (error: any) {
       if (error.response?.data) {
