@@ -1,4 +1,6 @@
-import { useMemo, useState } from 'react'
+import { useMemo, useState, useEffect } from 'react'
+import Snackbar from '@mui/material/Snackbar'
+import Alert from '@mui/material/Alert'
 import { simplexService, type SimplexProblem } from '../services/simplexService'
 import { useAppDispatch, useAppSelector } from '../hooks/reduxHooks'
 import { setLoading, setSolution, setError, clearCurrentResult } from '../redux/slices/simplexSlice'
@@ -46,6 +48,35 @@ export default function SimplexForm() {
   // Redux
   const dispatch = useAppDispatch()
   const { currentResult, isLoading, error: reduxError } = useAppSelector((state) => state.simplex)
+
+  // Snackbar error state
+  const [openErrorAlert, setOpenErrorAlert] = useState(false)
+  // Si currentResult existe y no tiene 'solution' => es un error del algoritmo
+  const isAlgorithmError = Boolean(currentResult && !('solution' in currentResult))
+  // Extraer la razón limpia que envía el backend (p. ej. "El problema no tiene solución posible (2D)")
+  function extractAlgorithmReason(msg: string): string | null {
+    if (!msg) return null
+    // Preferir lo que venga después de 'no pudo ser resuelto:'
+    const m = msg.match(/no pudo ser resuelto:\s*(.*)$/i)
+    if (m?.[1]) return m[1].trim()
+    // Si contiene ': ' tomar lo que viene después
+    const m2 = msg.match(/:\s*(.*)$/)
+    if (m2?.[1]) return m2[1].trim()
+    return msg.trim() || null
+  }
+
+  const rawAlgMsg = isAlgorithmError ? ((currentResult as any).msg ?? '') : ''
+  const algorithmReason = extractAlgorithmReason(rawAlgMsg) // ejemplo: "El problema no tiene solución posible (2D)"
+
+  // Mensaje fijo a mostrar en el bloque de resultado cuando el status es SIN_SOLUCION
+  const ALG_USER_MSG = 'Por favor introduzca otros coeficientes.'
+
+  // Mostrar alert (Snackbar): si hay error del algoritmo mostrar la razón limpia del backend;
+  // si no, mostrar reduxError (error de conexión u otros strings)
+  const alertMessage = isAlgorithmError ? (algorithmReason ?? ALG_USER_MSG) : ((reduxError && typeof reduxError === 'string') ? reduxError : null)
+  useEffect(() => {
+    setOpenErrorAlert(Boolean(alertMessage))
+  }, [alertMessage])
 
   // Estado local del formulario
   const [c1, setC1] = useState('')
@@ -133,6 +164,10 @@ export default function SimplexForm() {
     }
 
     // Enviar al backend usando Redux
+    // Reiniciar resultado y errores antes de iniciar nuevo cálculo
+    dispatch(clearCurrentResult())
+    setErrors({})
+    setOpenErrorAlert(false)
     dispatch(setLoading(true))
     
     try {
@@ -146,13 +181,16 @@ export default function SimplexForm() {
       dispatch(setSolution(response))
     } catch (error: any) {
       if (error.response?.data) {
-        // Error del algoritmo (NO_ACOTADA, SIN_SOLUCION, etc.)
+        // Error del algoritmo (No esta acotada, No tiene solución, etc.)
         dispatch(setError(error.response.data))
       } else {
         // Error de conexión
         dispatch(setError('Error al conectar con el servidor'))
         setErrors({ general: 'Error al conectar con el servidor' })
       }
+    } finally {
+      // Siempre quitar estado de carga (protección ante rutas que no llamen setSolution/setError)
+      dispatch(setLoading(false))
     }
   }
 
@@ -280,7 +318,7 @@ export default function SimplexForm() {
             disabled={!isValid || isLoading}
             style={{ background: '#222', color: '#fff', border: '1px solid #222', padding: '10px 16px', cursor: 'pointer', opacity: (isValid && !isLoading) ? 1 : 0.6 }}
           >
-            {isLoading ? 'Resolviendo...' : 'Validar y enviar'}
+            {isLoading ? 'Calculando...' : 'Validar y enviar'}
           </button>
           <button
             type="button"
@@ -298,14 +336,26 @@ export default function SimplexForm() {
           </button>
         </div>
       </form>
-      
+
+      {/* Indicador global de carga */}
+      {isLoading && (
+        <output aria-live="polite" style={{ marginTop: 16, display: 'flex', alignItems: 'center', gap: 8, justifyContent: 'center' }}>
+          <svg width="20" height="20" viewBox="0 0 50 50" style={{ animation: 'spin 1s linear infinite' }}>
+            <circle cx="25" cy="25" r="20" stroke="#1976d2" strokeWidth="5" strokeLinecap="round" fill="none" strokeDasharray="31.4 31.4"></circle>
+          </svg>
+          <span style={{ fontWeight: '600' }}>Calculando...</span>
+        </output>
+      )}
+
+      {/* Añadir keyframes de animación mínimos en línea */}
+      <style>{`@keyframes spin { from { transform: rotate(0deg);} to { transform: rotate(360deg);} }`}</style>
+
       {currentResult && (
         <div style={{ marginTop: '1rem', padding: '1rem', border: '1px solid #ddd', borderRadius: '4px' }}>
           {'solution' in currentResult ? (
             // Solución exitosa
             <div>
               <h3 style={{ color: 'green', marginTop: 0 }}>✓ Problema resuelto correctamente</h3>
-              <p><strong>Status:</strong> {currentResult.solution.status}</p>
               <p><strong>Valor óptimo:</strong> {currentResult.solution.objectiveValue}</p>
               <div>
                 <strong>Variables:</strong>
@@ -319,19 +369,32 @@ export default function SimplexForm() {
           ) : (
             // Error del algoritmo
             <div>
-              <h3 style={{ color: 'crimson', marginTop: 0 }}>✗ Error al resolver</h3>
-              <p><strong>Status:</strong> {currentResult.status}</p>
-              <p>{currentResult.msg}</p>
+              <h3 style={{ color: 'crimson', marginTop: 0 }}>✗ Error al resolver problema</h3>
+              {/* Mensaje asociado al status SIN_SOLUCION (independiente del snackbar) */}
+              {((currentResult as any).status === 'SIN_SOLUCION') && (
+                <p style={{ margin: 0 }}>Por favor introduzca otros coeficientes.</p>
+              )}
             </div>
           )}
         </div>
       )}
       
-      {reduxError && !currentResult && (
-        <div style={{ marginTop: '1rem', padding: '1rem', border: '1px solid crimson', borderRadius: '4px', backgroundColor: '#fff5f5' }}>
-          <p style={{ color: 'crimson', margin: 0 }}>{reduxError}</p>
-        </div>
-      )}
+      {/* Snackbar de error: muestra errores de conexión y errores del algoritmo */}
+      <Snackbar
+        open={openErrorAlert && !!alertMessage}
+        autoHideDuration={6000}
+        onClose={() => setOpenErrorAlert(false)}
+        anchorOrigin={{ vertical: 'top', horizontal: 'center' }}
+      >
+        <Alert
+          onClose={() => setOpenErrorAlert(false)}
+          severity="error"
+          variant="filled"
+          sx={{ minWidth: 300 }}
+        >
+          {alertMessage}
+        </Alert>
+      </Snackbar>
     </div>
   )
 }
