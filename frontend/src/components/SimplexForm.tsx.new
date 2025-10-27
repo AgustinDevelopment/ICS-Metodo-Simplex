@@ -28,8 +28,8 @@ type Operator = '<=' | '=' | '>='
 
 type ConstraintForm = {
   id: string
-  a1: string // coeficiente de x1
-  a2: string // coeficiente de x2
+  a1: string
+  a2: string
   op: Operator
   rhs: string
 }
@@ -63,40 +63,11 @@ function newConstraint(): ConstraintForm {
 }
 
 export default function SimplexForm() {
-  // Redux
   const dispatch = useAppDispatch()
   const { currentResult, isLoading, error: reduxError } = useAppSelector((state) => state.simplex)
 
-  // Snackbar error state
+  // Estado local
   const [openErrorAlert, setOpenErrorAlert] = useState(false)
-  // Si currentResult existe y no tiene 'solution' => es un error del algoritmo
-  const isAlgorithmError = Boolean(currentResult && !('solution' in currentResult))
-  // Extraer la razón limpia que envía el backend (p. ej. "El problema no tiene solución posible (2D)")
-  function extractAlgorithmReason(msg: string): string | null {
-    if (!msg) return null
-    // Preferir lo que venga después de 'no pudo ser resuelto:'
-    const m = msg.match(/no pudo ser resuelto:\s*(.*)$/i)
-    if (m?.[1]) return m[1].trim()
-    // Si contiene ': ' tomar lo que viene después
-    const m2 = msg.match(/:\s*(.*)$/)
-    if (m2?.[1]) return m2[1].trim()
-    return msg.trim() || null
-  }
-
-  const rawAlgMsg = isAlgorithmError ? ((currentResult as any).msg ?? '') : ''
-  const algorithmReason = extractAlgorithmReason(rawAlgMsg) // ejemplo: "El problema no tiene solución posible (2D)"
-
-  // Mensaje fijo a mostrar en el bloque de resultado cuando el status es SIN_SOLUCION
-  const ALG_USER_MSG = 'Por favor introduzca otros coeficientes.'
-
-  // Mostrar alert (Snackbar): si hay error del algoritmo mostrar la razón limpia del backend;
-  // si no, mostrar reduxError (error de conexión u otros strings)
-  const alertMessage = isAlgorithmError ? (algorithmReason ?? ALG_USER_MSG) : ((reduxError && typeof reduxError === 'string') ? reduxError : null)
-  useEffect(() => {
-    setOpenErrorAlert(Boolean(alertMessage))
-  }, [alertMessage])
-
-  // Estado local del formulario
   const [c1, setC1] = useState('')
   const [c2, setC2] = useState('')
   const [opt, setOpt] = useState<Optimization>('max')
@@ -104,9 +75,28 @@ export default function SimplexForm() {
   const [errors, setErrors] = useState<Errors>({})
 
   const constraintsErrors = errors.constraints ?? {}
+  const isAlgorithmError = Boolean(currentResult && !('solution' in currentResult))
+  
+  function extractAlgorithmReason(msg: string): string | null {
+    if (!msg) return null
+    const m = msg.match(/no pudo ser resuelto:\s*(.*)$/i)
+    if (m?.[1]) return m[1].trim()
+    const m2 = msg.match(/:\s*(.*)$/)
+    if (m2?.[1]) return m2[1].trim()
+    return msg.trim() || null
+  }
+
+  const rawAlgMsg = isAlgorithmError ? ((currentResult as any).msg ?? '') : ''
+  const algorithmReason = extractAlgorithmReason(rawAlgMsg)
+  const alertMessage = isAlgorithmError 
+    ? (algorithmReason ?? 'Por favor introduzca otros coeficientes.') 
+    : ((reduxError && typeof reduxError === 'string') ? reduxError : null)
+
+  useEffect(() => {
+    setOpenErrorAlert(Boolean(alertMessage))
+  }, [alertMessage])
 
   const isValid = useMemo(() => {
-    // Validación ligera para habilitar/deshabilitar submit
     if (!isFiniteNumberStr(c1) || !isFiniteNumberStr(c2)) return false
     if (constraints.length === 0) return false
     for (const ct of constraints) {
@@ -143,8 +133,7 @@ export default function SimplexForm() {
       if (!prev.constraints) return prev
       const rest = { ...prev.constraints }
       delete rest[id]
-      const next: Errors = { ...prev, constraints: Object.keys(rest).length ? rest : undefined }
-      return next
+      return { ...prev, constraints: Object.keys(rest).length ? rest : undefined }
     })
   }
 
@@ -156,11 +145,8 @@ export default function SimplexForm() {
     e.preventDefault()
     const v = validateAll()
     setErrors(v)
-    if (v.c1 || v.c2 || v.general || v.constraints) {
-      return
-    }
+    if (v.c1 || v.c2 || v.general || v.constraints) return
     
-    // Construir el problema en el formato del backend
     const problem: SimplexProblem = {
       name: 'Problema del formulario',
       objective: {
@@ -181,39 +167,29 @@ export default function SimplexForm() {
       variables: ['x1', 'x2']
     }
 
-    // Enviar al backend usando Redux
-    // Reiniciar resultado y errores antes de iniciar nuevo cálculo
     dispatch(clearCurrentResult())
     setErrors({})
     setOpenErrorAlert(false)
     dispatch(setLoading(true))
     
     try {
-      // 1. Guardar el problema en el backend (base de datos)
       const createdProblem = await simplexService.createProblem(problem)
-      
-      // 2. Resolver el problema guardado usando su ID
       const response = await simplexService.solveProblemById(createdProblem.problem.id)
-      
-      // 3. Guardar en Redux
       dispatch(setSolution(response))
     } catch (error: any) {
       if (error.response?.data) {
-        // Error del algoritmo (No esta acotada, No tiene solución, etc.)
         dispatch(setError(error.response.data))
       } else {
-        // Error de conexión
         dispatch(setError('Error al conectar con el servidor'))
         setErrors({ general: 'Error al conectar con el servidor' })
       }
     } finally {
-      // Siempre quitar estado de carga (protección ante rutas que no llamen setSolution/setError)
       dispatch(setLoading(false))
     }
   }
 
   return (
-    <Card className="max-w-4xl mx-auto shadow-xl">
+    <Card className="max-w-4xl mx-auto shadow-lg">
       <CardContent className="p-6">
         <Typography variant="h5" className="mb-8 text-indigo-700 font-bold text-center">
           Método Simplex (2 variables)
@@ -221,131 +197,184 @@ export default function SimplexForm() {
 
         <form onSubmit={onSubmit} noValidate className="space-y-8">
           {/* Función Objetivo */}
-          <Box>
-            <Typography variant="subtitle1" className="mb-3 font-medium">
+          <Box className="bg-white rounded-lg p-6 shadow-sm border border-gray-100">
+            <Typography variant="h6" className="text-gray-900 font-medium mb-4">
               Función Objetivo
             </Typography>
-            <Box className="flex flex-col sm:flex-row gap-6 mb-6">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <FormControl fullWidth>
+                <InputLabel id="opt-label">Optimización</InputLabel>
+                <Select
+                  labelId="opt-label"
+                  value={opt}
+                  onChange={(e) => setOpt(e.target.value as Optimization)}
+                  label="Optimización"
+                  className="bg-white"
+                >
+                  <MenuItem value="max">Maximizar</MenuItem>
+                  <MenuItem value="min">Minimizar</MenuItem>
+                </Select>
+              </FormControl>
               <TextField
-                label="Coef. x1 (a)"
+                label="Coeficiente X₁"
                 type="number"
                 value={c1}
                 onChange={(e) => setC1(e.target.value)}
                 error={!!errors.c1}
                 helperText={errors.c1}
                 fullWidth
+                className="bg-white"
               />
               <TextField
-                label="Coef. x2 (b)"
+                label="Coeficiente X₂"
                 type="number"
                 value={c2}
                 onChange={(e) => setC2(e.target.value)}
                 error={!!errors.c2}
                 helperText={errors.c2}
                 fullWidth
+                className="bg-white"
               />
-
-              <FormControl fullWidth sx={{ mt: 2 }}>
-                <InputLabel>Optimización</InputLabel>
-                <Select
-                  value={opt}
-                  label="Optimización"
-                  onChange={(e) => setOpt(e.target.value as Optimization)}
-                >
-                  <MenuItem value="max">Maximizar</MenuItem>
-                  <MenuItem value="min">Minimizar</MenuItem>
-                </Select>
-              </FormControl>
-            </Box>
+            </div>
           </Box>
 
-          <Divider className="my-6" />
-         
           {/* Restricciones */}
-          <Box>
-            <Typography variant="subtitle1" className="mb-3 font-medium mt-4">
+          <Box className="bg-gray-50 rounded-lg p-6 shadow-sm border border-gray-100">
+            <Typography variant="h6" className="text-gray-900 font-medium mb-4">
               Restricciones
             </Typography>
             {errors.general && (
-              <Alert severity="error" className="mb-3">
+              <Alert severity="error" className="mb-4">
                 {errors.general}
               </Alert>
             )}
-            <Box className="flex flex-col gap-3">
+            <div className="space-y-3">
               {constraints.map((ct, idx) => {
                 const e = constraintsErrors[ct.id] || {};
                 return (
-                  <Paper key={ct.id} className="p-3 flex flex-wrap items-start gap-2" elevation={1}>
-                    <TextField label={`x1 (${idx + 1})`} type="number" size="small" className="flex-1 min-w-[80px]"
-                      value={ct.a1} onChange={(e) => handleConstraintChange(ct.id, { a1: e.target.value })}
-                      error={!!e.a1} helperText={e.a1} />
-                    <TextField label="x2" type="number" size="small" className="flex-1 min-w-[80px]"
-                      value={ct.a2} onChange={(e) => handleConstraintChange(ct.id, { a2: e.target.value })}
-                      error={!!e.a2} helperText={e.a2} />
-                    <FormControl className="flex-1 min-w-[80px]" size="small">
-                      <InputLabel>Operador</InputLabel>
-                      <Select value={ct.op} label="Operador"
-                        onChange={(e) => handleConstraintChange(ct.id, { op: e.target.value as Operator })}>
-                        <MenuItem value="<=">{"<="}</MenuItem>
-                        <MenuItem value="=">{"="}</MenuItem>
-                        <MenuItem value=">=">{">="}</MenuItem>
-                      </Select>
-                    </FormControl>
-                    <TextField label="RHS" type="number" size="small" className="flex-1 min-w-[80px]"
-                      value={ct.rhs} onChange={(e) => handleConstraintChange(ct.id, { rhs: e.target.value })}
-                      error={!!e.rhs} helperText={e.rhs} />
-                    <IconButton color="error" onClick={() => handleRemoveConstraint(ct.id)} 
-                                disabled={constraints.length === 1}>
-                      <DeleteIcon />
-                    </IconButton>
+                  <Paper key={ct.id} className="p-4 bg-white rounded-lg shadow-sm">
+                    <div className="grid grid-cols-1 md:grid-cols-12 gap-4 items-start">
+                      <TextField
+                        label="X₁"
+                        type="number"
+                        value={ct.a1}
+                        onChange={(e) => handleConstraintChange(ct.id, { a1: e.target.value })}
+                        error={!!e.a1}
+                        helperText={e.a1}
+                        className="md:col-span-3"
+                        size="small"
+                        fullWidth
+                      />
+                      <TextField
+                        label="X₂"
+                        type="number"
+                        value={ct.a2}
+                        onChange={(e) => handleConstraintChange(ct.id, { a2: e.target.value })}
+                        error={!!e.a2}
+                        helperText={e.a2}
+                        className="md:col-span-3"
+                        size="small"
+                        fullWidth
+                      />
+                      <FormControl className="md:col-span-2" fullWidth size="small">
+                        <InputLabel id={`op-label-${ct.id}`}>Operador</InputLabel>
+                        <Select
+                          labelId={`op-label-${ct.id}`}
+                          value={ct.op}
+                          onChange={(e) => handleConstraintChange(ct.id, { op: e.target.value as Operator })}
+                          label="Operador"
+                          error={!!e.op}
+                        >
+                          <MenuItem value="<=">≤</MenuItem>
+                          <MenuItem value="=">=</MenuItem>
+                          <MenuItem value=">=">≥</MenuItem>
+                        </Select>
+                      </FormControl>
+                      <TextField
+                        label="RHS"
+                        type="number"
+                        value={ct.rhs}
+                        onChange={(e) => handleConstraintChange(ct.id, { rhs: e.target.value })}
+                        error={!!e.rhs}
+                        helperText={e.rhs}
+                        className="md:col-span-3"
+                        size="small"
+                        fullWidth
+                      />
+                      <IconButton
+                        onClick={() => handleRemoveConstraint(ct.id)}
+                        disabled={constraints.length === 1}
+                        className="md:col-span-1"
+                        color="error"
+                        size="small"
+                      >
+                        <DeleteIcon />
+                      </IconButton>
+                    </div>
                   </Paper>
                 );
               })}
-
               <Button
                 variant="outlined"
-                color="primary"
                 onClick={handleAddConstraint}
-                className="self-start mt-2" // 'self-start' lo alinea a la izquierda
                 startIcon={<AddIcon />}
+                fullWidth
+                className="mt-4"
               >
-                + Agregar restricción
+                Agregar restricción
               </Button>
-            </Box>
+            </div>
           </Box>
 
-          {/* Botones principales */}
-          <Box className="flex flex-wrap gap-4 justify-center pt-4">
-            <Button type="submit" variant="contained" color="success"
-              startIcon={isLoading ? <CircularProgress size={18} /> : undefined}
-              disabled={!isValid || isLoading}>
-              {isLoading ? "Calculando..." : "Validar y enviar"}
-            </Button>
-            <Button variant="outlined" color="inherit" onClick={() => {
-              setC1(""); setC2(""); setOpt("max"); setConstraints([newConstraint()]);
-              setErrors({}); dispatch(clearCurrentResult());
-            }}>
+          {/* Acciones */}
+          <Box className="flex flex-wrap gap-4 justify-end">
+            <Button
+              variant="outlined"
+              color="inherit"
+              onClick={() => {
+                setC1(""); setC2(""); setOpt("max");
+                setConstraints([newConstraint()]);
+                setErrors({});
+                dispatch(clearCurrentResult());
+              }}
+              className="min-w-[120px]"
+            >
               Limpiar
+            </Button>
+            <Button
+              variant="contained"
+              type="submit"
+              disabled={!isValid || isLoading}
+              className="min-w-[200px]"
+            >
+              {isLoading ? (
+                <div className="flex items-center gap-2">
+                  <CircularProgress size={20} color="inherit" />
+                  <span>Calculando...</span>
+                </div>
+              ) : (
+                "Resolver"
+              )}
             </Button>
           </Box>
         </form>
 
-        {/* Resultado */}
+        {/* Resultados */}
         {currentResult && (
-          <Box className="mt-8 p-4 border border-gray-200 rounded-lg">
-            {"solution" in currentResult ? (
-              <Alert severity="success" variant="outlined">
-                <Typography variant="subtitle1" className="font-semibold mb-2">
+          <Box className="mt-8">
+            {currentResult.solution ? (
+              <Alert severity="success" variant="outlined" className="bg-green-50">
+                <Typography variant="subtitle1" className="font-medium mb-3">
                   ✓ Problema resuelto correctamente
                 </Typography>
-                <Typography>
+                <Typography className="mb-2">
                   <strong>Valor óptimo:</strong>{" "}
                   {currentResult.solution.objectiveValue}
                 </Typography>
-                <ul className="list-disc pl-5">
+                <ul className="list-disc pl-5 space-y-1">
                   {Object.entries(currentResult.solution.variables).map(
                     ([key, value]) => (
-                      <li key={key}>
+                      <li key={key} className="text-gray-700">
                         {key} = {value}
                       </li>
                     )
@@ -353,10 +382,12 @@ export default function SimplexForm() {
                 </ul>
               </Alert>
             ) : (
-              <Alert severity="error" variant="outlined">
-                ✗ Error al resolver problema
+              <Alert severity="error" variant="outlined" className="bg-red-50">
+                <Typography variant="subtitle1" className="font-medium mb-2">
+                  ✗ Error al resolver problema
+                </Typography>
                 {((currentResult as any).status === "SIN_SOLUCION") && (
-                  <Typography className="mt-2">
+                  <Typography variant="body2" className="text-gray-700">
                     Por favor introduzca otros coeficientes.
                   </Typography>
                 )}
@@ -365,7 +396,6 @@ export default function SimplexForm() {
           </Box>
         )}
 
-        {/* Snackbar de errores */}
         <Snackbar
           open={openErrorAlert && !!alertMessage}
           autoHideDuration={6000}
