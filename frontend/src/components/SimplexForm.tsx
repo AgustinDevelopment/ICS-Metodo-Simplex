@@ -157,13 +157,6 @@ export default function SimplexForm() {
     return next
   }
 
-  // --- NUEVO: validar en tiempo real al cambiar campos ---
-  useEffect(() => {
-    const v = validateAll()
-    setErrors(v)
-  }, [c1, c2, constraints])
-  // -----------------------------------------------------
-
   function handleAddConstraint() {
     setConstraints((prev) => [...prev, newConstraint()])
   }
