@@ -103,8 +103,27 @@ export default function SimplexForm() {
   const [constraints, setConstraints] = useState<ConstraintForm[]>([newConstraint()])
   const [errors, setErrors] = useState<Errors>({})
 
+  // Helpers para bloquear la tecla 'e' (notación exponencial) y filtrar pegado no numérico
+  function handleNumericKeyDown(e: React.KeyboardEvent<any>) {
+    // Bloquear 'e' y 'E' que permiten notación exponencial en inputs type=number
+    if (e.key === 'e' || e.key === 'E') {
+      e.preventDefault()
+    }
+  }
+
+  function handleNumericPaste(e: React.ClipboardEvent<any>) {
+    const paste = e.clipboardData.getData('text').trim()
+    if (paste === '') return
+    // Aceptar números con signo y punto decimal (no aceptar notación exponencial como 1e3)
+    const numericRe = /^-?\d*(\.\d+)?$/
+    if (!numericRe.test(paste)) {
+      e.preventDefault()
+    }
+  }
+
   const constraintsErrors = errors.constraints ?? {}
 
+  // Validación ligera para habilitar/deshabilitar submit (mantener)
   const isValid = useMemo(() => {
     // Validación ligera para habilitar/deshabilitar submit
     if (!isFiniteNumberStr(c1) || !isFiniteNumberStr(c2)) return false
@@ -118,20 +137,32 @@ export default function SimplexForm() {
 
   function validateAll(): Errors {
     const next: Errors = { constraints: {} }
-    if (!isFiniteNumberStr(c1)) next.c1 = 'Ingrese un número válido'
-    if (!isFiniteNumberStr(c2)) next.c2 = 'Ingrese un número válido'
+    if (c1.trim() === '') next.c1 = 'Campo vacío'
+    else if (!isFiniteNumberStr(c1)) next.c1 = 'Número inválido'
+    if (c2.trim() === '') next.c2 = 'Campo vacío'
+    else if (!isFiniteNumberStr(c2)) next.c2 = 'Número inválido'
     if (constraints.length === 0) next.general = 'Agregue al menos una restricción'
     for (const ct of constraints) {
       const e: NonNullable<Errors['constraints']>[string] = {}
-      if (!isFiniteNumberStr(ct.a1)) e.a1 = 'Número inválido'
-      if (!isFiniteNumberStr(ct.a2)) e.a2 = 'Número inválido'
-      if (!isFiniteNumberStr(ct.rhs)) e.rhs = 'Número inválido'
+      if (ct.a1.trim() === '') e.a1 = 'Campo vacío'
+      else if (!isFiniteNumberStr(ct.a1)) e.a1 = 'Número inválido'
+      if (ct.a2.trim() === '') e.a2 = 'Campo vacío'
+      else if (!isFiniteNumberStr(ct.a2)) e.a2 = 'Número inválido'
+      if (ct.rhs.trim() === '') e.rhs = 'Campo vacío'
+      else if (!isFiniteNumberStr(ct.rhs)) e.rhs = 'Número inválido'
       if (!['<=', '=', '>='].includes(ct.op)) e.op = 'Operador inválido'
       if (Object.keys(e).length) next.constraints![ct.id] = e
     }
     if (Object.keys(next.constraints!).length === 0) delete next.constraints
     return next
   }
+
+  // --- NUEVO: validar en tiempo real al cambiar campos ---
+  useEffect(() => {
+    const v = validateAll()
+    setErrors(v)
+  }, [c1, c2, constraints])
+  // -----------------------------------------------------
 
   function handleAddConstraint() {
     setConstraints((prev) => [...prev, newConstraint()])
@@ -212,6 +243,9 @@ export default function SimplexForm() {
     }
   }
 
+  // Helper: determinar si hay errores visibles para desactivar submit
+  const hasClientErrors = Object.keys(errors).length > 0
+
   return (
     <Card className="max-w-4xl mx-auto shadow-xl">
       <CardContent className="p-6">
@@ -231,18 +265,24 @@ export default function SimplexForm() {
                 type="number"
                 value={c1}
                 onChange={(e) => setC1(e.target.value)}
+                onKeyDown={handleNumericKeyDown}
+                onPaste={handleNumericPaste}
                 error={!!errors.c1}
                 helperText={errors.c1}
                 fullWidth
+                inputProps={{ inputMode: 'decimal', pattern: '^-?\\d*(\\.\\d+)?$' }}
               />
               <TextField
                 label="Coef. x2 (b)"
                 type="number"
                 value={c2}
                 onChange={(e) => setC2(e.target.value)}
+                onKeyDown={handleNumericKeyDown}
+                onPaste={handleNumericPaste}
                 error={!!errors.c2}
                 helperText={errors.c2}
                 fullWidth
+                inputProps={{ inputMode: 'decimal', pattern: '^-?\\d*(\\.\\d+)?$' }}
               />
 
               <FormControl fullWidth sx={{ mt: 2 }}>
@@ -277,23 +317,26 @@ export default function SimplexForm() {
                 return (
                   <Paper key={ct.id} className="p-3 flex flex-wrap items-start gap-2" elevation={1}>
                     <TextField label={`x1 (${idx + 1})`} type="number" size="small" className="flex-1 min-w-[80px]"
-                      value={ct.a1} onChange={(e) => handleConstraintChange(ct.id, { a1: e.target.value })}
-                      error={!!e.a1} helperText={e.a1} />
+                      value={ct.a1} onChange={(ev) => handleConstraintChange(ct.id, { a1: ev.target.value })}
+                      onKeyDown={handleNumericKeyDown} onPaste={handleNumericPaste}
+                      error={!!e.a1} helperText={e.a1} inputProps={{ inputMode: 'decimal', pattern: '^-?\\d*(\\.\\d+)?$' }} />
                     <TextField label="x2" type="number" size="small" className="flex-1 min-w-[80px]"
-                      value={ct.a2} onChange={(e) => handleConstraintChange(ct.id, { a2: e.target.value })}
-                      error={!!e.a2} helperText={e.a2} />
+                      value={ct.a2} onChange={(ev) => handleConstraintChange(ct.id, { a2: ev.target.value })}
+                      onKeyDown={handleNumericKeyDown} onPaste={handleNumericPaste}
+                      error={!!e.a2} helperText={e.a2} inputProps={{ inputMode: 'decimal', pattern: '^-?\\d*(\\.\\d+)?$' }} />
                     <FormControl className="flex-1 min-w-[80px]" size="small">
                       <InputLabel>Operador</InputLabel>
                       <Select value={ct.op} label="Operador"
-                        onChange={(e) => handleConstraintChange(ct.id, { op: e.target.value as Operator })}>
+                        onChange={(ev) => handleConstraintChange(ct.id, { op: ev.target.value as Operator })}>
                         <MenuItem value="<=">{"<="}</MenuItem>
                         <MenuItem value="=">{"="}</MenuItem>
                         <MenuItem value=">=">{">="}</MenuItem>
                       </Select>
                     </FormControl>
                     <TextField label="RHS" type="number" size="small" className="flex-1 min-w-[80px]"
-                      value={ct.rhs} onChange={(e) => handleConstraintChange(ct.id, { rhs: e.target.value })}
-                      error={!!e.rhs} helperText={e.rhs} />
+                      value={ct.rhs} onChange={(ev) => handleConstraintChange(ct.id, { rhs: ev.target.value })}
+                      onKeyDown={handleNumericKeyDown} onPaste={handleNumericPaste}
+                      error={!!e.rhs} helperText={e.rhs} inputProps={{ inputMode: 'decimal', pattern: '^-?\\d*(\\.\\d+)?$' }} />
                     <IconButton color="error" onClick={() => handleRemoveConstraint(ct.id)} 
                                 disabled={constraints.length === 1}>
                       <DeleteIcon />
@@ -318,7 +361,7 @@ export default function SimplexForm() {
           <Box className="flex flex-wrap gap-4 justify-center pt-4">
             <Button type="submit" variant="contained" color="success"
               startIcon={isLoading ? <CircularProgress size={18} /> : undefined}
-              disabled={!isValid || isLoading}>
+              disabled={!isValid || isLoading || hasClientErrors}>
               {isLoading ? "Calculando..." : "Validar y enviar"}
             </Button>
             <Button variant="outlined" color="inherit" onClick={() => {
