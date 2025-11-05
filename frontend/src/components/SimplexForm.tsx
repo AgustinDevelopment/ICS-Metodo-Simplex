@@ -154,6 +154,24 @@ export default function SimplexForm() {
   const [constraints, setConstraints] = useState<ConstraintForm[]>([newConstraint()])
   const [errors, setErrors] = useState<Errors>({})
 
+  // Helpers para bloquear la tecla 'e' (notación exponencial) y filtrar pegado no numérico
+  function handleNumericKeyDown(e: React.KeyboardEvent<any>) {
+    // Bloquear 'e' y 'E' que permiten notación exponencial en inputs type=number
+    if (e.key === 'e' || e.key === 'E') {
+      e.preventDefault()
+    }
+  }
+
+  function handleNumericPaste(e: React.ClipboardEvent<any>) {
+    const paste = e.clipboardData.getData('text').trim()
+    if (paste === '') return
+    // Aceptar números con signo y punto decimal (no aceptar notación exponencial como 1e3)
+    const numericRe = /^-?\d*(\.\d+)?$/
+    if (!numericRe.test(paste)) {
+      e.preventDefault()
+    }
+  }
+
   const constraintsErrors = errors.constraints ?? {}
 
   // Validación ligera para habilitar/deshabilitar submit (mantener)
