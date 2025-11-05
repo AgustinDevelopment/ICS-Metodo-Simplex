@@ -38,9 +38,6 @@ export class SimplexSolverService {
     const earlyError = this.validateOrError(problem);
     if (earlyError) return earlyError;
 
-    const twoDPre = this.tryTwoDDirect(problem);
-    if (twoDPre) return twoDPre;
-
     const prepared = this.prepareInitialTableauOrError(problem);
     if ('type' in (prepared as SimplexError)) return prepared as SimplexError;
     const { tableau: startTableau } = prepared as { tableau: SimplexTableau; normalized: SimplexProblem };
@@ -55,9 +52,19 @@ export class SimplexSolverService {
     const variables = this.extractVariablesFromTableau(finalTableau, problem);
     const objectiveValue = this.evaluateObjectiveValue(problem, variables);
 
+    // Usar cross-check 2D para mejorar precisión pero mantener las iteraciones
     if (problem.variables.length === 2) {
       const better2D = this.crossCheck2DOrBetter(problem, objectiveValue);
-      if (better2D) return this.roundSolution(better2D, DEFAULT_DECIMALS) as SimplexSolution;
+      if (better2D && 'variables' in better2D) {
+        // Retornar la solución 2D mejorada PERO con las iteraciones del simplex
+        return this.roundSolution({ 
+          optimal: true, 
+          bounded: true, 
+          variables: better2D.variables, 
+          objectiveValue: better2D.objectiveValue, 
+          iterations 
+        }, DEFAULT_DECIMALS);
+      }
     }
 
     return this.roundSolution({ optimal: true, bounded: true, variables, objectiveValue, iterations }, DEFAULT_DECIMALS);

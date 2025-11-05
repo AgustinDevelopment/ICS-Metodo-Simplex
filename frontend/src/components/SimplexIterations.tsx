@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { simplexService, type SimplexIteration } from '../services/simplexService'
 
 interface SimplexIterationsProps {
-  problemId: number
+  readonly problemId: number
 }
 
 export default function SimplexIterations({ problemId }: SimplexIterationsProps) {
@@ -40,8 +40,26 @@ export default function SimplexIterations({ problemId }: SimplexIterationsProps)
 
   if (error) {
     return (
-      <div style={{ padding: '2rem', textAlign: 'center', color: '#f44336' }}>
-        <p>{error}</p>
+      <div style={{ padding: '2rem', textAlign: 'center' }}>
+        <div style={{ 
+          padding: '1.5rem', 
+          backgroundColor: '#fff3e0', 
+          borderRadius: '8px',
+          border: '1px solid #ff9800',
+          maxWidth: '600px',
+          margin: '0 auto'
+        }}>
+          <h3 style={{ margin: '0 0 1rem 0', color: '#e65100' }}>
+            ⚠️ No hay iteraciones guardadas
+          </h3>
+          <p style={{ margin: '0 0 1rem 0', color: '#666', lineHeight: '1.6' }}>
+            Este problema fue creado antes de implementar el guardado de iteraciones,
+            o se resolvió con una versión anterior del sistema.
+          </p>
+          <p style={{ margin: 0, color: '#666', fontWeight: 'bold' }}>
+            💡 Solución: Resuelve el problema nuevamente usando el formulario.
+          </p>
+        </div>
       </div>
     )
   }
@@ -49,7 +67,21 @@ export default function SimplexIterations({ problemId }: SimplexIterationsProps)
   if (iterations.length === 0) {
     return (
       <div style={{ padding: '2rem', textAlign: 'center' }}>
-        <p>No hay iteraciones disponibles para este problema.</p>
+        <div style={{ 
+          padding: '1.5rem', 
+          backgroundColor: '#e3f2fd', 
+          borderRadius: '8px',
+          border: '1px solid #2196f3',
+          maxWidth: '600px',
+          margin: '0 auto'
+        }}>
+          <h3 style={{ margin: '0 0 1rem 0', color: '#1565c0' }}>
+            ℹ️ Sin iteraciones
+          </h3>
+          <p style={{ margin: 0, color: '#666' }}>
+            No hay iteraciones registradas para este problema.
+          </p>
+        </div>
       </div>
     )
   }
@@ -184,31 +216,41 @@ export default function SimplexIterations({ problemId }: SimplexIterationsProps)
             fontSize: '14px'
           }}>
             <tbody>
-              {currentIteration.tableau.map((row, rowIndex) => (
-                <tr 
-                  key={rowIndex}
-                  style={{ 
-                    backgroundColor: rowIndex === currentIteration.tableau.length - 1 
-                      ? '#fff3e0' 
-                      : rowIndex % 2 === 0 ? '#fafafa' : '#fff'
-                  }}
-                >
-                  {row.map((cell, cellIndex) => (
-                    <td 
-                      key={cellIndex}
-                      style={{ 
-                        padding: '8px 12px',
-                        border: '1px solid #e0e0e0',
-                        textAlign: 'center',
-                        fontFamily: 'monospace',
-                        fontWeight: rowIndex === currentIteration.tableau.length - 1 ? 'bold' : 'normal'
-                      }}
-                    >
-                      {typeof cell === 'number' ? cell.toFixed(2) : cell}
-                    </td>
-                  ))}
-                </tr>
-              ))}
+              {currentIteration.tableau.map((row, rowIndex) => {
+                const isLastRow = rowIndex === currentIteration.tableau.length - 1
+                const isEvenRow = rowIndex % 2 === 0
+                
+                let rowBgColor: string
+                if (isLastRow) {
+                  rowBgColor = '#fff3e0'
+                } else if (isEvenRow) {
+                  rowBgColor = '#fafafa'
+                } else {
+                  rowBgColor = '#fff'
+                }
+                
+                return (
+                  <tr 
+                    key={`row-${currentIteration.iterationNumber}-${rowIndex}`}
+                    style={{ backgroundColor: rowBgColor }}
+                  >
+                    {row.map((cell, cellIndex) => (
+                      <td 
+                        key={`cell-${currentIteration.iterationNumber}-${rowIndex}-${cellIndex}`}
+                        style={{ 
+                          padding: '8px 12px',
+                          border: '1px solid #e0e0e0',
+                          textAlign: 'center',
+                          fontFamily: 'monospace',
+                          fontWeight: isLastRow ? 'bold' : 'normal'
+                        }}
+                      >
+                        {typeof cell === 'number' ? cell.toFixed(2) : cell}
+                      </td>
+                    ))}
+                  </tr>
+                )
+              })}
             </tbody>
           </table>
         </div>
