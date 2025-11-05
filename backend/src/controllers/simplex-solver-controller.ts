@@ -116,6 +116,11 @@ export class SimplexSolverController {
 
       const result = this.simplexService.solve(problem);
 
+      // Si la solución es exitosa y tiene iteraciones, guardarlas en la base de datos
+      if (!('type' in result) && result.iterations) {
+        await this.saveIterations(problemData.id, result.iterations);
+      }
+
       return this.processSolutionResult(res, problemData.name, result, problemData.id);
     
     } catch (error) {
@@ -162,4 +167,99 @@ export class SimplexSolverController {
             }
         });
     }
+
+  private async saveIterations(problemId: number, iterations: any[]) {
+    try {
+      // Eliminar iteraciones anteriores de este problema
+      await prisma.simplexIteration.deleteMany({
+        where: { problemId }
+      });
+
+      // Guardar cada iteración
+      for (let i = 0; i < iterations.length; i++) {
+        const iteration = iterations[i];
+        
+        // Extraer las variables básicas del tableau
+        const basicVariables: Record<string, number> = {};
+        const matrix = iteration.matrix;
+        const lastRow = matrix.length - 1;
+        const lastCol = matrix[0].length - 1;
+        
+        // Las variables básicas están en la columna basis
+        if (iteration.basis) {
+          iteration.basis.forEach((varIndex: number, rowIndex: number) => {
+            if (rowIndex < lastRow) {
+              const varName = iteration.labels && iteration.labels[varIndex] 
+                ? iteration.labels[varIndex] 
+                : `x${varIndex}`;
+              basicVariables[varName] = matrix[rowIndex][lastCol];
+            }
+          });
+        }
+
+        // El valor objetivo está en la última fila, última columna
+        const objectiveValue = matrix[lastRow][lastCol];
+
+        // Detectar variable que entra y sale (si no es la primera iteración)
+        let enteringVar = null;
+        let leavingVar = null;
+        if (i > 0) {
+          const prevIteration = iterations[i - 1];
+          // Comparar basis para detectar cambios
+          if (prevIteration.basis && iteration.basis) {
+            for (let j = 0; j < iteration.basis.length; j++) {
+              if (prevIteration.basis[j] !== iteration.basis[j]) {
+                enteringVar = iteration.labels?.[iteration.basis[j]] || `x${iteration.basis[j]}`;
+                leavingVar = prevIteration.labels?.[prevIteration.basis[j]] || `x${prevIteration.basis[j]}`;
+                break;
+              }
+            }
+          }
+        }
+
+        // Determinar si es óptima (última iteración)
+        const isOptimal = i === iterations.length - 1;
+
+        await prisma.simplexIteration.create({
+          data: {
+            problemId,
+            iterationNumber: i + 1,
+            tableau: iteration.matrix,
+            basicVariables,
+            objectiveValue,
+            enteringVar,
+            leavingVar,
+            isOptimal
+          }
+        });
+      }
+    } catch (error) {
+      console.error('Error saving iterations:', error);
+      // No lanzamos error para no interrumpir la respuesta al usuario
+    }
+  }
+
+  async getIterationsByProblemId(req: Request, res: Response) {
+    try {
+      const id = parseInt(req.params.id);
+      
+      const iterations = await prisma.simplexIteration.findMany({
+        where: { problemId: id },
+        orderBy: { iterationNumber: 'asc' }
+      });
+
+      if (iterations.length === 0) {
+        return res.status(404).json({ msg: 'No se encontraron iteraciones para este problema' });
+      }
+
+      res.status(200).json({
+        msg: 'Iteraciones obtenidas',
+        iterations
+      });
+    } catch (error) {
+      console.error('Error getting iterations:', error);
+      res.status(500).json({ msg: 'Error al obtener las iteraciones' });
+    }
+  }
 }
+

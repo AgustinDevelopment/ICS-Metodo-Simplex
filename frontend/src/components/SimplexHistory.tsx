@@ -1,12 +1,40 @@
+import { useState } from 'react'
 import { useAppSelector, useAppDispatch } from '../hooks/reduxHooks'
 import { clearHistory } from '../redux/slices/simplexSlice'
+import SimplexIterations from './SimplexIterations'
 
 export default function SimplexHistory() {
   const dispatch = useAppDispatch()
   const history = useAppSelector((state) => state.simplex.history)
+  const [selectedProblemId, setSelectedProblemId] = useState<number | null>(null)
 
   if (history.length === 0) {
     return null
+  }
+
+  // Si hay un problema seleccionado, mostrar sus iteraciones
+  if (selectedProblemId !== null) {
+    return (
+      <div>
+        <button
+          onClick={() => setSelectedProblemId(null)}
+          style={{
+            marginBottom: '1rem',
+            padding: '10px 20px',
+            backgroundColor: '#1976d2',
+            color: 'white',
+            border: 'none',
+            borderRadius: '4px',
+            cursor: 'pointer',
+            fontSize: '16px',
+            fontWeight: 'bold'
+          }}
+        >
+          ← Volver al Historial
+        </button>
+        <SimplexIterations problemId={selectedProblemId} />
+      </div>
+    )
   }
 
   return (
@@ -81,6 +109,31 @@ export default function SimplexHistory() {
                   </ul>
                 </div>
               </div>
+
+              {/* Botón para ver iteraciones - Solo si el problema tiene ID */}
+              {result.problem.id && (
+                <div style={{ marginTop: '1rem', textAlign: 'right' }}>
+                  <button
+                    onClick={() => {
+                      if (result.problem.id) {
+                        setSelectedProblemId(result.problem.id)
+                      }
+                    }}
+                    style={{
+                      padding: '8px 16px',
+                      backgroundColor: '#1976d2',
+                      color: 'white',
+                      border: 'none',
+                      borderRadius: '4px',
+                      cursor: 'pointer',
+                      fontSize: '14px',
+                      fontWeight: 'bold'
+                    }}
+                  >
+                    Ver Iteraciones 📊
+                  </button>
+                </div>
+              )}
             </div>
           );
         })}

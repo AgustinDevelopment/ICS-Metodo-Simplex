@@ -56,5 +56,11 @@ export class SimplexSolverRouter extends BaseRouter<SimplexSolverController> {
 			(req, res, next) => this.middleware.validateGetProblem(req, res, next),
 			(req, res) => this.controller.solveProblemById(req, res)
 		);
+
+		this.router.get(
+			'/:id/iterations',
+			(req, res, next) => this.middleware.validateGetProblem(req, res, next),
+			(req, res) => this.controller.getIterationsByProblemId(req, res)
+		);
 	}
 }
