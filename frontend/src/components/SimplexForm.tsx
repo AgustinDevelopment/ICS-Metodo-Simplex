@@ -23,6 +23,8 @@ import {
 import DeleteIcon from '@mui/icons-material/Delete';
 import AddIcon from '@mui/icons-material/Add';
 
+
+
 type Optimization = 'max' | 'min'
 type Operator = '<=' | '=' | '>='
 
@@ -74,8 +76,8 @@ function extractAlgorithmReason(msg: string): string | null {
 }
 
 function validateField(value: string): string | undefined {
-  if (value.trim() === '') return 'Campo vacío'
-  if (!isFiniteNumberStr(value)) return 'Número inválido'
+  if (value.trim() === '') return 'Este campo es obligatorio'
+  if (!isFiniteNumberStr(value)) return 'Ingrese un número válido'
   return undefined
 }
 
@@ -123,29 +125,41 @@ export default function SimplexForm() {
   const dispatch = useAppDispatch()
   const { currentResult, isLoading, error: reduxError } = useAppSelector((state) => state.simplex)
 
-  // Snackbar error state
-  const [openErrorAlert, setOpenErrorAlert] = useState(false)
+  // Estados para manejo de errores
+  const [errorMessages, setErrorMessages] = useState<{
+    validation: string[],
+    backend: string | null,
+    algorithm: string | null
+  }>({
+    validation: [],
+    backend: null,
+    algorithm: null
+  })
+
   // Si currentResult existe y no tiene 'solution' => es un error del algoritmo
   const isAlgorithmError = Boolean(currentResult && !('solution' in currentResult))
-  // Extraer la razón limpia que envía el backend (p. ej. "El problema no tiene solución posible (2D)")
-  const rawAlgMsg = isAlgorithmError ? ((currentResult as any).msg ?? '') : ''
-  const algorithmReason = extractAlgorithmReason(rawAlgMsg) // ejemplo: "El problema no tiene solución posible (2D)"
-
-  // Mensaje fijo a mostrar en el bloque de resultado cuando el status es SIN_SOLUCION
-  const ALG_USER_MSG = 'Por favor introduzca otros coeficientes.'
-
-  // Mostrar alert (Snackbar): si hay error del algoritmo mostrar la razón limpia del backend;
-  // si no, mostrar reduxError (error de conexión u otros strings)
-  let alertMessage: string | null = null
-  if (isAlgorithmError) {
-    alertMessage = algorithmReason ?? ALG_USER_MSG
-  } else if (reduxError && typeof reduxError === 'string') {
-    alertMessage = reduxError
-  }
   
+  // Extraer y formatear mensaje del error del algoritmo
+  const algorithmError = useMemo(() => {
+    if (!isAlgorithmError) return null
+    const cr: any = currentResult
+    if (cr.status === 'SIN_SOLUCION') 
+      return 'No se encontró una solución con los coeficientes proporcionados. Intente con otros valores.'
+    if (cr.status === 'NO_ACOTADA') 
+      return 'El problema no está acotado: la solución tiende a infinito.'
+    if (cr.status === 'ENTRADA_INVALIDA') 
+      return 'Los datos ingresados son inválidos. Por favor verifique los valores.'
+    return extractAlgorithmReason(cr.msg) ?? 'Error al resolver el problema'
+  }, [currentResult, isAlgorithmError])
+
+  // Efecto para actualizar errores cuando cambia el estado del backend
   useEffect(() => {
-    setOpenErrorAlert(Boolean(alertMessage))
-  }, [alertMessage])
+    setErrorMessages(prev => ({
+      ...prev,
+      algorithm: algorithmError,
+      backend: typeof reduxError === 'string' ? reduxError : null
+    }))
+  }, [algorithmError, reduxError])
 
   // Estado local del formulario
   const [c1, setC1] = useState('')
@@ -240,9 +254,40 @@ export default function SimplexForm() {
     e.preventDefault()
     const v = validateAll()
     setErrors(v)
+
+    // Si hay errores cliente, actualizar mensajes de validación
     if (v.c1 || v.c2 || v.general || v.constraints) {
+      // Reunir todos los mensajes de error
+      const messages: string[] = []
+      if (v.general) messages.push(v.general)
+      if (v.c1) messages.push(`Coeficiente x1: ${v.c1}`)
+      if (v.c2) messages.push(`Coeficiente x2: ${v.c2}`)
+      
+      // Agregar errores de restricciones
+      if (v.constraints) {
+        Object.entries(v.constraints).forEach(([id, err], idx) => {
+          const msgs = []
+          if (err.a1) msgs.push(`x1: ${err.a1}`)
+          if (err.a2) msgs.push(`x2: ${err.a2}`)
+          if (err.rhs) msgs.push(`valor: ${err.rhs}`)
+          if (msgs.length > 0) {
+            messages.push(`Restricción ${idx + 1}: ${msgs.join(', ')}`)
+          }
+        })
+      }
+
+      setErrorMessages(prev => ({
+        ...prev,
+        validation: messages
+      }))
       return
     }
+
+    // Limpiar errores de validación si pasa
+    setErrorMessages(prev => ({
+      ...prev,
+      validation: []
+    }))
     
     // Construir el problema en el formato del backend
     const problem: SimplexProblem = {
@@ -266,10 +311,8 @@ export default function SimplexForm() {
     }
 
     // Enviar al backend usando Redux
-    // Reiniciar resultado y errores antes de iniciar nuevo cálculo
     dispatch(clearCurrentResult())
     setErrors({})
-    setOpenErrorAlert(false)
     dispatch(setLoading(true))
     
     try {
@@ -279,19 +322,21 @@ export default function SimplexForm() {
       // 2. Resolver el problema guardado usando su ID
       const response = await simplexService.solveProblemById(createdProblem.problem.id)
       
-      // 3. Guardar en Redux
+      // 3. Guardar en Redux y limpiar errores
       dispatch(setSolution(response))
+      setErrorMessages(prev => ({...prev, backend: null}))
     } catch (error: any) {
       if (error.response?.data) {
-        // Error del algoritmo (No esta acotada, No tiene solución, etc.)
+        // Error del algoritmo
         dispatch(setError(error.response.data))
       } else {
         // Error de conexión
-        dispatch(setError('Error al conectar con el servidor'))
-        setErrors({ general: 'Error al conectar con el servidor' })
+        const msg = 'Error al conectar con el servidor'
+        dispatch(setError(msg))
+        setErrors({ general: msg })
+        setErrorMessages(prev => ({...prev, backend: msg}))
       }
     } finally {
-      // Siempre quitar estado de carga (protección ante rutas que no llamen setSolution/setError)
       dispatch(setLoading(false))
     }
   }
@@ -307,6 +352,35 @@ export default function SimplexForm() {
         </Typography>
 
         <form onSubmit={onSubmit} noValidate className="space-y-8">
+          {/* Mostrar errores de validación */}
+          {errorMessages.validation.length > 0 && (
+            <Alert 
+              severity="error" 
+              variant="outlined" 
+              onClose={() => setErrorMessages(prev => ({...prev, validation: []}))}
+            >
+              <Typography variant="subtitle2" gutterBottom>
+                Por favor corrija los siguientes errores:
+              </Typography>
+              <ul className="list-disc pl-4 mt-2">
+                {errorMessages.validation.map((msg, idx) => (
+                  <li key={idx}>{msg}</li>
+                ))}
+              </ul>
+            </Alert>
+          )}
+
+          {/* Mostrar error del backend o algoritmo */}
+          {(errorMessages.backend || errorMessages.algorithm) && (
+            <Alert 
+              severity="error" 
+              variant="outlined" 
+              onClose={() => setErrorMessages(prev => ({...prev, backend: null, algorithm: null}))}
+            >
+              {errorMessages.algorithm ?? errorMessages.backend}
+            </Alert>
+          )}
+
           {/* Función Objetivo */}
           <Box>
             <Typography variant="subtitle1" className="mb-3 font-medium">
@@ -461,22 +535,7 @@ export default function SimplexForm() {
           </Box>
         )}
 
-        {/* Snackbar de errores */}
-        <Snackbar
-          open={openErrorAlert && !!alertMessage}
-          autoHideDuration={6000}
-          onClose={() => setOpenErrorAlert(false)}
-          anchorOrigin={{ vertical: "top", horizontal: "center" }}
-        >
-          <Alert
-            onClose={() => setOpenErrorAlert(false)}
-            severity="error"
-            variant="filled"
-            sx={{ minWidth: 300 }}
-          >
-            {alertMessage}
-          </Alert>
-        </Snackbar>
+
       </CardContent>
     </Card>
   );
