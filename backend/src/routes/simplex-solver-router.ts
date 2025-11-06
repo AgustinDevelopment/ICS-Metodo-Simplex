@@ -16,6 +16,27 @@ export class SimplexSolverRouter extends BaseRouter<SimplexSolverController> {
 	}
 
 	protected setRoutes(): void {
+		// Rutas específicas
+		this.router.post(
+			'/solve',
+			(req, res, next) => this.middleware.validateCreateProblem(req, res, next), 
+			(req, res) => this.controller.solveUnsavedProblem(req, res) 
+		);
+
+		// Rutas con parámetros específicos
+		this.router.get(
+			'/:id/iterations',
+			(req, res, next) => this.middleware.validateGetProblem(req, res, next),
+			(req, res) => this.controller.getIterationsByProblemId(req, res)
+		);
+
+		this.router.post(
+			'/:id/solve',
+			(req, res, next) => this.middleware.validateGetProblem(req, res, next),
+			(req, res) => this.controller.solveProblemById(req, res)
+		);
+
+		// CRUD básico
 		this.router.post(
 			'/',
 			(req, res, next) => this.middleware.validateCreateProblem(req, res, next),
@@ -27,6 +48,7 @@ export class SimplexSolverRouter extends BaseRouter<SimplexSolverController> {
 			(req, res) => this.controller.getProblems(req, res)
 		);
 
+		// Rutas genéricas con parámetro
 		this.router.get(
 			'/:id',
 			(req, res, next) => this.middleware.validateGetProblem(req, res, next),
@@ -43,18 +65,6 @@ export class SimplexSolverRouter extends BaseRouter<SimplexSolverController> {
 			'/:id',
 			(req, res, next) => this.middleware.validateDeleteProblem(req, res, next),
 			(req, res) => this.controller.deleteProblem(req, res)
-		);
-
-		this.router.post(
-            '/solve',
-            (req, res, next) => this.middleware.validateCreateProblem(req, res, next), 
-            (req, res) => this.controller.solveUnsavedProblem(req, res) 
-        )
-
-		this.router.post(
-			'/:id/solve',
-			(req, res, next) => this.middleware.validateGetProblem(req, res, next),
-			(req, res) => this.controller.solveProblemById(req, res)
 		);
 	}
 }

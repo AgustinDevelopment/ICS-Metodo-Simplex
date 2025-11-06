@@ -45,6 +45,24 @@ export interface SimplexErrorResponse {
   status: 'NO_ACOTADA' | 'SIN_SOLUCION' | 'ENTRADA_INVALIDA';
 }
 
+export interface SimplexIteration {
+  id: number;
+  problemId: number;
+  iterationNumber: number;
+  tableau: number[][];
+  basicVariables: Record<string, number>;
+  objectiveValue: number;
+  enteringVar: string | null;
+  leavingVar: string | null;
+  isOptimal: boolean;
+  createdAt: string;
+}
+
+export interface IterationsResponse {
+  msg: string;
+  iterations: SimplexIteration[];
+}
+
 // Servicio para resolver problemas Simplex
 export const simplexService = {
   // Resolver problema sin guardarlo en DB
@@ -81,6 +99,12 @@ export const simplexService = {
 
   async deleteProblem(id: number) {
     const response = await api.delete(`/problems/${id}`);
+    return response.data;
+  },
+
+  // Obtener iteraciones de un problema
+  async getIterations(problemId: number): Promise<IterationsResponse> {
+    const response = await api.get<IterationsResponse>(`/problems/${problemId}/iterations`);
     return response.data;
   },
 };
