@@ -1,10 +1,10 @@
 import request from "supertest";
 import { app } from "../server";
 
-describe("POST /api/solve", () => {
+describe("POST /problems/solve", () => {
     it("Debería devolver una solución óptima para un problema válido", async () => {
         const response = await request(app)
-            .post("/api/solve")
+            .post("/problems/solve")
             .send({
                 name: "Test Problem",
                 objective: {
@@ -46,7 +46,7 @@ describe("POST /api/solve", () => {
 
     it("Debería devolver error 400 si los datos son inválidos", async () => {
         const response = await request(app)
-            .post("/api/solve")
+            .post("/problems/solve")
             .send({
                 name: "",  // Nombre vacío para provocar error
                 objective: {
@@ -60,5 +60,34 @@ describe("POST /api/solve", () => {
         expect(response.status).toBe(400);
         expect(response.body).toHaveProperty("message");
         expect(response.body.message).toBe("Validation error");
+    });
+
+    it("Debería devolver 400 si hay valores no numéricos", async () => {
+        const response = await request(app)
+            .post("/problems/solve")
+            .send({
+                name: "Invalid Numbers",
+                objective: {
+                    type: "max",
+                    coefficients: [
+                        { value: "5", variable: "x1" },
+                        { value: 4, variable: "x2" }
+                    ]
+                },
+                constraints: [
+                    {
+                        coefficients: [
+                            { value: 6, variable: "x1" },
+                            { value: 4, variable: "x2" }
+                        ],
+                        operator: "<=",
+                        rightSide: "24"
+                    }
+                ],
+                variables: ["x1", "x2"]
+            });
+
+        expect(response.status).toBe(400);
+        expect(response.body).toHaveProperty("message", "Validation error");
     });
 });
