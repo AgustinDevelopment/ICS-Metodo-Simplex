@@ -4,39 +4,35 @@ import { ZodError } from 'zod';
 import { SimplexProblem } from '../types/types';
 
 export class SimplexSolverMiddleware {
+  private handleValidationError(error: unknown, res: Response) {
+    if (error instanceof ZodError) {
+      return res.status(400).json({
+        message: 'Validation error',
+        errors: error.issues
+      });
+    }
+    return res.status(500).json({ message: 'Internal server error' });
+  }
+
   async validateCreateProblem(req: Request, res: Response, next: NextFunction) {
     try {
-      const validatedData = simplexProblemSchema.parse(req.body);
-      req.body = validatedData;
+      req.body = simplexProblemSchema.parse(req.body);
       return next();
     } catch (error) {
-      if (error instanceof ZodError) {
-        return res.status(400).json({
-          message: 'Validation error',
-          errors: error.issues
-        });
-      }
-      return res.status(500).json({ message: 'Internal server error' });
+      return this.handleValidationError(error, res);
     }
   }
 
   async validateUpdateProblem(req: Request, res: Response, next: NextFunction) {
     try {
-      const validatedData = updateProblemSchema.parse(req.body);
-      req.body = validatedData;
+      req.body = updateProblemSchema.parse(req.body);
       return next();
     } catch (error) {
-      if (error instanceof ZodError) {
-        return res.status(400).json({
-          message: 'Validation error',
-          errors: error.issues
-        });
-      }
-      return res.status(500).json({ message: 'Internal server error' });
+      return this.handleValidationError(error, res);
     }
   }
 
-  async validateGetProblem(req: Request, res: Response, next: NextFunction) {
+  private validateIdParam(req: Request, res: Response, next: NextFunction) {
     const id = Number.parseInt(req.params.id);
     if (Number.isNaN(id)) {
       return res.status(400).json({ message: 'Invalid ID format' });
@@ -44,28 +40,23 @@ export class SimplexSolverMiddleware {
     return next();
   }
 
+  async validateGetProblem(req: Request, res: Response, next: NextFunction) {
+    return this.validateIdParam(req, res, next);
+  }
+
   async validateDeleteProblem(req: Request, res: Response, next: NextFunction) {
-    const id = Number.parseInt(req.params.id);
-    if (Number.isNaN(id)) {
-      // Log the error for delete operation
-      console.error(`Delete operation failed: Invalid ID format (${req.params.id})`);
-      return res.status(400).json({ message: 'Invalid ID format for delete operation' });
-    }
-    return next();
+    return this.validateIdParam(req, res, next);
   }
 
   validateSimplexInput(problem: SimplexProblem): boolean {
-    // Validar que haya al menos 2 variables
     if (problem.variables.length < 2) {
       return false;
     }
 
-    // Validar que haya al menos una restricción
     if (problem.constraints.length === 0) {
       return false;
     }
 
-    // Validar que todas las restricciones usen las mismas variables
     const validVariables = new Set(problem.variables);
     
     for (const constraint of problem.constraints) {
@@ -76,7 +67,6 @@ export class SimplexSolverMiddleware {
       }
     }
 
-    // Validar la función objetivo
     for (const coef of problem.objective.coefficients) {
       if (!validVariables.has(coef.variable)) {
         return false;

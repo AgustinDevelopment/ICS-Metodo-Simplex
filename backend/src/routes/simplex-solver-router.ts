@@ -13,58 +13,55 @@ export class SimplexSolverRouter extends BaseRouter<SimplexSolverController> {
 	constructor({ controller, middleware }: SimplexSolverRouterProps) {
 		super(controller);
 		this.middleware = middleware;
+		this.setRoutes();
 	}
 
 	protected setRoutes(): void {
-		// Rutas específicas
 		this.router.post(
 			'/solve',
-			(req, res, next) => this.middleware.validateCreateProblem(req, res, next), 
-			(req, res) => this.controller.solveUnsavedProblem(req, res) 
+			this.middleware.validateCreateProblem.bind(this.middleware), 
+			this.controller.solveUnsavedProblem.bind(this.controller) 
 		);
 
-		// Rutas con parámetros específicos
 		this.router.get(
 			'/:id/iterations',
-			(req, res, next) => this.middleware.validateGetProblem(req, res, next),
-			(req, res) => this.controller.getIterationsByProblemId(req, res)
+			this.middleware.validateGetProblem.bind(this.middleware),
+			this.controller.getIterationsByProblemId.bind(this.controller)
 		);
 
 		this.router.post(
 			'/:id/solve',
-			(req, res, next) => this.middleware.validateGetProblem(req, res, next),
-			(req, res) => this.controller.solveProblemById(req, res)
+			this.middleware.validateGetProblem.bind(this.middleware),
+			this.controller.solveProblemById.bind(this.controller)
 		);
 
-		// CRUD básico
 		this.router.post(
 			'/',
-			(req, res, next) => this.middleware.validateCreateProblem(req, res, next),
-			(req, res) => this.controller.createProblem(req, res)
+			this.middleware.validateCreateProblem.bind(this.middleware),
+			this.controller.createProblem.bind(this.controller)
 		);
 
 		this.router.get(
 			'/',
-			(req, res) => this.controller.getProblems(req, res)
+			this.controller.getProblems.bind(this.controller)
 		);
 
-		// Rutas genéricas con parámetro
 		this.router.get(
 			'/:id',
-			(req, res, next) => this.middleware.validateGetProblem(req, res, next),
-			(req, res) => this.controller.getProblemById(req, res)
+			this.middleware.validateGetProblem.bind(this.middleware),
+			this.controller.getProblemById.bind(this.controller)
 		);
 
 		this.router.put(
 			'/:id',
-			(req, res, next) => this.middleware.validateUpdateProblem(req, res, next),
-			(req, res) => this.controller.updateProblem(req, res)
+			this.middleware.validateUpdateProblem.bind(this.middleware),
+			this.controller.updateProblem.bind(this.controller)
 		);
 
 		this.router.delete(
 			'/:id',
-			(req, res, next) => this.middleware.validateDeleteProblem(req, res, next),
-			(req, res) => this.controller.deleteProblem(req, res)
+			this.middleware.validateDeleteProblem.bind(this.middleware),
+			this.controller.deleteProblem.bind(this.controller)
 		);
 	}
 }

@@ -1,12 +1,6 @@
-// Resolución por Enumeración de Vértices (solo para 2 variables) como alternativa al Simplex.
 import { Coefficient, SimplexError, SimplexProblem, SimplexSolution } from '../../types/types';
-import { roundSolution } from './utils';
-import { EPS, DEFAULT_DECIMALS } from './constants';
+import { roundSolution, EPS, DEFAULT_DECIMALS } from '../../utils';
 
-/*
- * Resuelve problemas 2D enumerando intersecciones de restricciones y ejes.
- * Devuelve null si no aplica o si se decide delegar a otra técnica.
- */
 function getCoeff(coefs: Coefficient[], name: string): number {
   return coefs.find(c => c.variable === name)?.value ?? 0;
 }
@@ -30,7 +24,7 @@ function intersectLines(a1:number,b1:number,c1:number,a2:number,b2:number,c2:num
   if (Math.abs(det) < eps) return null;
   const x = (c1*b2 - c2*b1) / det;
   const y = (a1*c2 - a2*c1) / det;
-  if (!isFinite(x) || !isFinite(y)) return null;
+  if (!Number.isFinite(x) || !Number.isFinite(y)) return null;
   return [x,y];
 }
 
@@ -44,9 +38,10 @@ function buildCandidateLines(problem: SimplexProblem, v1: string, v2: string, ep
     if (Math.abs(a) > eps) lines.push({a:1,b:0,c:0});
     if (Math.abs(b) > eps) lines.push({a:0,b:1,c:0});
   }
-  // asegurar ejes
-  lines.push({a:1,b:0,c:0});
-  lines.push({a:0,b:1,c:0});
+  lines.push(
+    {a:1,b:0,c:0},
+    {a:0,b:1,c:0}
+  );
   return lines;
 }
 
@@ -64,7 +59,7 @@ export function solveByVertexEnumeration(problem: SimplexProblem): SimplexSoluti
   const candidates = new Set<string>();
 
   const addPt = (x:number,y:number) => {
-    if (!isFinite(x) || !isFinite(y)) return;
+    if (!Number.isFinite(x) || !Number.isFinite(y)) return;
     const kx = Math.abs(x) < eps ? 0 : x;
     const ky = Math.abs(y) < eps ? 0 : y;
     candidates.add(`${kx.toFixed(10)}|${ky.toFixed(10)}`);
@@ -83,7 +78,8 @@ export function solveByVertexEnumeration(problem: SimplexProblem): SimplexSoluti
 
   for (const key of candidates) {
     const [xs,ys] = key.split('|');
-    const x = parseFloat(xs); const y = parseFloat(ys);
+    const x = Number.parseFloat(xs);
+    const y = Number.parseFloat(ys);
     if (!isFeasible2D(problem, v1, v2, x, y, eps)) continue;
     const val = evaluateObjective(problem, v1, v2, x, y);
     const isBetter = problem.objective.type === 'max' ? (val > bestValue + eps) : (val < bestValue - eps);

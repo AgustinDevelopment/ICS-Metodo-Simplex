@@ -1,11 +1,6 @@
-// Utilidades de fases del método Simplex: construir Fase I, sacar artificiales y armar Fase II.
 import { SimplexProblem, SimplexTableau } from '../../types/types';
 import { iterate } from './tableau';
-import { MIN_EPS, EPS } from './constants';
-
-// =====================
-// Helpers internos
-// =====================
+import { EPS, MIN_EPS } from '../../utils';
 
 function computeAuxiliaryColumns(problem: SimplexProblem) {
   const n = problem.variables.length;
@@ -24,13 +19,13 @@ function computeAuxiliaryColumns(problem: SimplexProblem) {
     } else if (op === '>=') {
       rowSurplus[i] = colIndex; colIndex++;
       rowArtificial[i] = colIndex; artificialCols.push(colIndex); colIndex++;
-    } else { // '=' o caso general
+    } else {
       rowArtificial[i] = colIndex; artificialCols.push(colIndex); colIndex++;
     }
   }
 
-  const cols = colIndex + 1; // + RHS
-  const rows = m + 1; // + fila objetivo
+  const cols = colIndex + 1;
+  const rows = m + 1;
   return { rows, cols, rowSlack, rowArtificial, rowSurplus, artificialCols };
 }
 
@@ -55,10 +50,8 @@ function buildConstraintMatrix(problem: SimplexProblem, rows: number, cols: numb
 
 function buildPhaseIObjectiveRow(matrix: number[][], rows: number, cols: number,
   artificialCols: number[], rowArtificial: (number | null)[]) {
-  // Inicializar fila objetivo con -1 en columnas artificiales
   for (const aCol of artificialCols) matrix[rows - 1][aCol] = -1;
 
-  // Sumar filas que contienen artificiales para lograr forma inicial factible
   const m = rows - 1;
   for (let i = 0; i < m; i++) {
     if (rowArtificial[i] !== null) {
@@ -66,7 +59,6 @@ function buildPhaseIObjectiveRow(matrix: number[][], rows: number, cols: number,
     }
   }
 
-  // FIX: invertir signo para que la fila represente -w (RHS ≈ -∑b en la BFS inicial)
   for (let j = 0; j < cols; j++) {
     matrix[rows - 1][j] = -matrix[rows - 1][j];
   }
@@ -76,36 +68,31 @@ function buildInitialBasis(rowSlack: (number | null)[], rowArtificial: (number |
   const basis: number[] = [];
   const m = rowSlack.length;
   for (let i = 0; i < m; i++) {
-    if (rowSlack[i] !== null) basis.push(rowSlack[i]!);
-    else if (rowArtificial[i] !== null) basis.push(rowArtificial[i]!);
-    else basis.push(0);
+    const slack = rowSlack[i];
+    if (slack === null) {
+      basis.push(rowArtificial[i] ?? 0);
+    } else {
+      basis.push(slack);
+    }
   }
   return basis;
 }
 
 function buildNonBasis(cols: number, basis: number[]) {
   const nonBasis: number[] = [];
-  for (let j = 0; j < cols - 1; j++) { // todas menos RHS
+  for (let j = 0; j < cols - 1; j++) {
     if (!basis.includes(j)) nonBasis.push(j);
   }
   return nonBasis;
 }
 
-/*
- * Determina si la Fase I es factible (valor -w en RHS cercano a 0 o mayor).
- */
 export function isPhaseIFeasible(phaseITableau: SimplexTableau): boolean {
   const lastRow = phaseITableau.matrix.length - 1;
   const rhs = phaseITableau.matrix[0].length - 1;
   const value = phaseITableau.matrix[lastRow][rhs];
-  return value >= -EPS; // tolerancia pequeña centralizada
+  return value >= -EPS;
 }
 
-/*
- * Construye el tableau de Fase I para el problema dado.
- * Devuelve null si no se necesitan variables artificiales (no hace falta Fase I).
- * Retorna: { tableau, artificialCols, rowArtificial } o null si no hay artificiales.
- */
 export function buildPhaseITableau(problem: SimplexProblem): { tableau: SimplexTableau, artificialCols: number[], rowArtificial: (number|null)[] } | null {
   const { rows, cols, rowSlack, rowArtificial, rowSurplus, artificialCols } = computeAuxiliaryColumns(problem);
   if (artificialCols.length === 0) return null;
@@ -119,11 +106,6 @@ export function buildPhaseITableau(problem: SimplexProblem): { tableau: SimplexT
   return { tableau: { matrix, basis, nonBasis, objectiveRow }, artificialCols, rowArtificial };
 }
 
-/*
- * Intenta pivotear las variables artificiales para sacarlas de la base
- * una vez finalizada la Fase I.
- * Parámetros: tableau de Fase I y las columnas artificiales.
- */
 export function pivotOutArtificial(tableau: SimplexTableau, artificialCols: number[]): void {
   const cols = tableau.matrix[0].length - 1;
   const isArtificial = (col: number) => artificialCols.includes(col);
@@ -147,13 +129,8 @@ export function pivotOutArtificial(tableau: SimplexTableau, artificialCols: numb
   }
 }
 
-/*
- * Construye el tableau de Fase II usando la función objetivo original
- * y la base actual, llevando la fila objetivo a forma reducida.
- * Retorna un nuevo tableau listo para continuar con Simplex.
- */
 export function buildPhaseIISimplexTableau(problem: SimplexProblem, phaseITableau: SimplexTableau): SimplexTableau {
-  const tableau: SimplexTableau = JSON.parse(JSON.stringify(phaseITableau));
+  const tableau: SimplexTableau = structuredClone(phaseITableau);
   const rows = tableau.matrix.length;
   const cols = tableau.matrix[0].length;
   const lastRow = rows - 1;
@@ -162,7 +139,6 @@ export function buildPhaseIISimplexTableau(problem: SimplexProblem, phaseITablea
   for (const coef of problem.objective.coefficients) {
     const varIndex = problem.variables.indexOf(coef.variable);
     if (varIndex >= 0) {
-      // Siempre armar como maximización (costes reducidos negativos buscados)
       objectiveRow[varIndex] = -coef.value;
     }
   }
