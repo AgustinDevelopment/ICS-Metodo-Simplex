@@ -1,7 +1,13 @@
+/**
+ * Utilidad para exportar problemas Simplex a PDF
+ * Genera un PDF completo con todas las iteraciones
+ */
+
 import jsPDF from 'jspdf'
 import html2canvas from 'html2canvas'
 import { simplexService } from '../services/simplexService'
 
+// Captura elemento HTML y lo convierte a canvas
 const captureElement = async (element: HTMLElement) => {
   return await html2canvas(element, {
     scale: 2,
@@ -11,6 +17,7 @@ const captureElement = async (element: HTMLElement) => {
   })
 }
 
+// Agrega canvas al PDF, maneja páginas múltiples
 const addCanvasToPDF = (pdf: jsPDF, canvas: HTMLCanvasElement, isFirstPage: boolean) => {
   const imgData = canvas.toDataURL('image/png')
   const imgWidth = 210
@@ -36,6 +43,10 @@ const addCanvasToPDF = (pdf: jsPDF, canvas: HTMLCanvasElement, isFirstPage: bool
   }
 }
 
+/**
+ * Exporta un problema completo a PDF con todas sus iteraciones
+ * Incluye tableaux, variables básicas y función objetivo
+ */
 export const exportCompleteProblemToPDF = async (problemId: number, problemName: string) => {
   try {
     const response = await simplexService.getIterations(problemId)

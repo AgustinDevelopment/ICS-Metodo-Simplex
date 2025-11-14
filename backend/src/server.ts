@@ -1,5 +1,7 @@
 import express, { Application } from 'express';
 import cors from 'cors';
+import swaggerUi from 'swagger-ui-express';
+import { swaggerSpec } from './config/swagger';
 
 import { SimplexSolverController } from './controllers/simplex-solver-controller';
 import { SimplexSolverMiddleware } from './middlewares/simplex-solver-middleware';
@@ -13,6 +15,7 @@ export class Server {
   constructor() {
     this.setMiddlewares();
     this.setRouters();
+    this.setSwagger();
   }
 
   private setMiddlewares(): void {
@@ -28,6 +31,11 @@ export class Server {
     const simplexSolverRouter = new SimplexSolverRouter({ controller, middleware });
 
     this.app.use('/problems', simplexSolverRouter.router);
+  }
+
+  private setSwagger(): void {
+    this.app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
+    console.log('📚 Swagger disponible en http://localhost:' + this.port + '/api-docs');
   }
 
   public run(): void {
