@@ -1,10 +1,6 @@
-// Operaciones sobre el tableau del método Simplex: inicialización, pivoteo e iteración.
 import { SimplexProblem, SimplexTableau } from '../../types/types';
-import { DEFAULT_MAX_ITERATIONS, EPS } from './constants';
+import { DEFAULT_MAX_ITERATIONS, EPS } from '../../utils';
 
-/*
- * Crea un tableau inicial (con holguras o excesos) a partir del problema.
- */
 export function createInitialTableau(problem: SimplexProblem): SimplexTableau {
   const numConstraints = problem.constraints.length;
   const numVars = problem.variables.length;
@@ -20,8 +16,7 @@ export function createInitialTableau(problem: SimplexProblem): SimplexTableau {
       const varIndex = problem.variables.indexOf(coef.variable);
       if (varIndex !== -1) matrix[i][varIndex] = coef.value;
     }
-  // Este creador de tableau estándar se usa solo cuando todas son <=
-  matrix[i][numVars + i] = 1;
+    matrix[i][numVars + i] = 1;
     matrix[i][totalVars] = constraint.rightSide;
   }
 
@@ -43,10 +38,6 @@ export function createInitialTableau(problem: SimplexProblem): SimplexTableau {
   return { matrix, basis, nonBasis, objectiveRow };
 }
 
-/*
- * Encuentra la columna pivote usando la regla del más negativo (maximización típica).
- * Retorna -1 si ya no hay mejora posible.
- */
 function hasPositiveInColumn(tableau: SimplexTableau, col: number): boolean {
   for (let i = 0; i < tableau.matrix.length - 1; i++) {
     if (tableau.matrix[i][col] > EPS) return true;
@@ -64,13 +55,9 @@ export function findPivotColumn(tableau: SimplexTableau): number {
     if (val < fallback.val - EPS) { fallback = { val, idx: j }; }
     if (val < best.val - EPS && hasPositiveInColumn(tableau, j)) { best = { val, idx: j }; }
   }
-  return best.idx !== -1 ? best.idx : fallback.idx;
+  return best.idx === -1 ? fallback.idx : best.idx;
 }
 
-/*
- * Encuentra la fila pivote mediante el test del cociente mínimo.
- * Retorna -1 si el problema es no acotado para esa columna.
- */
 export function findPivotRow(tableau: SimplexTableau, pivotColumn: number): number {
   const lastColIndex = tableau.matrix[0].length - 1;
   let minRatio = Infinity;
@@ -87,9 +74,6 @@ export function findPivotRow(tableau: SimplexTableau, pivotColumn: number): numb
   return minIndex;
 }
 
-/*
- * Aplica una iteración de pivoteo Gauss-Jordan en (pivotRow, pivotColumn).
- */
 export function iterate(tableau: SimplexTableau, pivotRow: number, pivotColumn: number): SimplexTableau {
   const numRows = tableau.matrix.length;
   const numCols = tableau.matrix[0].length;
@@ -108,21 +92,17 @@ export function iterate(tableau: SimplexTableau, pivotRow: number, pivotColumn: 
   return tableau;
 }
 
-/*
- * Ejecuta iteraciones de Simplex hasta llegar a óptimo o alcanzar maxIterations.
- */
 export function runSimplex(start: SimplexTableau, maxIterations: number): { tableau: SimplexTableau } {
-  let tableau: SimplexTableau = JSON.parse(JSON.stringify(start));
+  let tableau: SimplexTableau = structuredClone(start);
   let it = 0;
   while (it < maxIterations) {
     const pivotColumn = findPivotColumn(tableau);
     if (pivotColumn === -1) { break; }
     const pivotRow = findPivotRow(tableau, pivotColumn);
     if (pivotRow === -1) { break; }
-    const entering = pivotColumn; // usar índice de columna absoluto como variable entrante
+    const entering = pivotColumn;
     const leaving = tableau.basis[pivotRow];
     tableau.basis[pivotRow] = entering;
-    // reemplazar en nonBasis el índice 'entering' por 'leaving'
     const nbIdx = tableau.nonBasis.indexOf(entering);
     if (nbIdx !== -1) tableau.nonBasis[nbIdx] = leaving;
     tableau = iterate(tableau, pivotRow, pivotColumn);
@@ -131,17 +111,13 @@ export function runSimplex(start: SimplexTableau, maxIterations: number): { tabl
   return { tableau };
 }
 
-// Variante que además devuelve el historial de tableaux para trazabilidad.
 export function runSimplexWithHistory(start: SimplexTableau, maxIterations: number = DEFAULT_MAX_ITERATIONS): { tableau: SimplexTableau, history: SimplexTableau[] } {
-  const history: SimplexTableau[] = [JSON.parse(JSON.stringify(start))];
+  const history: SimplexTableau[] = [structuredClone(start)];
   let { tableau } = runSimplex(start, maxIterations);
-  history.push(JSON.parse(JSON.stringify(tableau)));
+  history.push(structuredClone(tableau));
   return { tableau, history };
 }
 
-/*
- * Convierte la fila objetivo a forma de maximización (signo invertido) in-place.
- */
 export function toMaximizationRow(tableau: SimplexTableau): void {
   const lastRow = tableau.matrix.length - 1;
   for (let j = 0; j < tableau.matrix[0].length; j++) {

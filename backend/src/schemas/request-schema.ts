@@ -34,8 +34,8 @@ export const simplexProblemSchema = z.object({
 .superRefine((d, ctx) => {
   const variableSet = new Set(d.variables);
 
-  // Validar variables en función objetivo
-  d.objective.coefficients.forEach((c, idx) => {
+  for (let idx = 0; idx < d.objective.coefficients.length; idx++) {
+    const c = d.objective.coefficients[idx];
     if (!variableSet.has(c.variable)) {
       ctx.addIssue({
         code: 'custom',
@@ -43,11 +43,12 @@ export const simplexProblemSchema = z.object({
         path: ['objective', 'coefficients', idx, 'variable']
       });
     }
-  });
+  }
 
-  // Validar variables en restricciones
-  d.constraints.forEach((cons, cIdx) => {
-    cons.coefficients.forEach((coef, idx) => {
+  for (let cIdx = 0; cIdx < d.constraints.length; cIdx++) {
+    const cons = d.constraints[cIdx];
+    for (let idx = 0; idx < cons.coefficients.length; idx++) {
+      const coef = cons.coefficients[idx];
       if (!variableSet.has(coef.variable)) {
         ctx.addIssue({
           code: 'custom',
@@ -55,13 +56,10 @@ export const simplexProblemSchema = z.object({
           path: ['constraints', cIdx, 'coefficients', idx, 'variable']
         });
       }
-    });
-  });
+    }
+  }
 });
 
 export const updateProblemSchema = simplexProblemSchema.partial();
 
 export type SimplexProblemDTO = z.infer<typeof simplexProblemSchema>;
-
-export const requestSchema = {
-};

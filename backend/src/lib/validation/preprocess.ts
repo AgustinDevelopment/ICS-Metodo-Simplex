@@ -1,12 +1,5 @@
-// Preprocesamiento y validaciones para problemas de PL antes de correr Simplex.
 import { Coefficient, Operator, SimplexProblem } from '../../types/types';
 
-/*
- * Valida el problema.
- * - true: válido
- * - 'SIN_SOLUCION': inviabilidad evidente
- * - false: formato inválido
- */
 export function validateProblem(problem: SimplexProblem): true | 'SIN_SOLUCION' | false {
   if (!problem.objective || !problem.constraints || problem.constraints.length === 0) {
     return false;

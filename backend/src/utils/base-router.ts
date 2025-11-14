@@ -7,7 +7,6 @@ export abstract class BaseRouter<Controller> {
     constructor(controller: Controller) {
         this.router = Router();
         this.controller = controller;
-        this.setRoutes();
     }
 
     protected abstract setRoutes(): void;

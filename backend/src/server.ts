@@ -4,7 +4,7 @@ import cors from 'cors';
 import { SimplexSolverController } from './controllers/simplex-solver-controller';
 import { SimplexSolverMiddleware } from './middlewares/simplex-solver-middleware';
 import { SimplexSolverRouter } from './routes/simplex-solver-router';
-import { SimplexSolverService } from './services/simplex-solver-service';
+import { SimplexSolverService } from './services/simplex-solver.service';
 
 export class Server {
   private readonly app: Application = express();
@@ -27,7 +27,6 @@ export class Server {
     const middleware = new SimplexSolverMiddleware();
     const simplexSolverRouter = new SimplexSolverRouter({ controller, middleware });
 
-    // Ruta principal para la API
     this.app.use('/problems', simplexSolverRouter.router);
   }
 
@@ -42,7 +41,6 @@ export class Server {
   }
 }
 
-//instancia del servidor para los tests
 const serverInstance = new Server();
 export const app = serverInstance.getApp();
 
